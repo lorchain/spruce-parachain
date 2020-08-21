@@ -1,10 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use primitives::{Balance, CurrencyId};
 use codec::{Decode, Encode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, dispatch, ensure,
-	traits::{Currency, Get},
+	traits::Get,
 };
 use frame_system::{self as system, ensure_signed};
 

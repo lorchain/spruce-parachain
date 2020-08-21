@@ -2,11 +2,10 @@
 
 use codec::{Encode, Decode};
 use frame_support::{
-	debug, decl_module, decl_storage, decl_error, decl_event, ensure, StorageValue, StorageMap, Parameter,
+	decl_module, decl_storage, decl_error, decl_event, ensure, StorageValue, StorageMap, Parameter,
 	traits::{Randomness, Currency, ExistenceRequirement, Get},
 	dispatch,
 };
-use sp_io::hashing::blake2_128;
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{ModuleId,
 	traits::{
@@ -329,12 +328,12 @@ impl<T: Trait> Module<T> {
 		let total_supply = token::Module::<T>::total_supply(pair.pair_token);
 		if total_supply == Zero::zero() {
 			liquidity = ((amount_a * amount_b) * (amount_a * amount_b)) - MINIMUM_LIQUIDITY.into();
-			token::Module::<T>::mint(T::AccountId::default(), pair.pair_token, MINIMUM_LIQUIDITY.into()); // permanently lock the first MINIMUM_LIQUIDITY tokens
+			token::Module::<T>::mint(pair.pair_token, &T::AccountId::default(), MINIMUM_LIQUIDITY.into()); // permanently lock the first MINIMUM_LIQUIDITY tokens
 		} else {
 			liquidity = cmp::min(amount_a * total_supply / reserve_a, amount_b * total_supply / reserve_b);
 		}
 		ensure!(liquidity >= Zero::zero(), Error::<T>::InsufficientLiquidityMinted);
-		token::Module::<T>::mint(to, pair.pair_token, liquidity);
+		token::Module::<T>::mint(pair.pair_token, &to, liquidity);
 
 		Self::do_update(pair_id, balance_a, balance_b, reserve_a, reserve_b);
 
@@ -361,7 +360,7 @@ impl<T: Trait> Module<T> {
 		let amount_b = liquidity * balance_b / total_supply;
 		ensure!(amount_a > Zero::zero() && amount_b > Zero::zero(), Error::<T>::InsufficientLiquidityBurned);
 
-		token::Module::<T>::burn(pair.account.clone(), pair.pair_token, liquidity);
+		token::Module::<T>::burn(pair.pair_token, &pair.account, liquidity);
 		token::Module::<T>::do_safe_transfer_from(pair.account.clone(), to.clone(), pair.token_a, amount_a);
 		token::Module::<T>::do_safe_transfer_from(pair.account.clone(), to.clone(), pair.token_b, amount_b);
 

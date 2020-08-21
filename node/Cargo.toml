@@ -1,6 +1,6 @@
 [package]
 name = "node-template"
-version = "2.0.0-rc4"
+version = "2.0.0-rc6"
 authors = ["Anonymous"]
 edition = "2018"
 license = "Unlicense"
@@ -10,31 +10,37 @@ build = "build.rs"
 name = "node-template"
 
 [dependencies]
-futures = "0.3.4"
-log = "0.4.8"
 structopt = "0.3.8"
-parking_lot = "0.10.0"
 
-sc-cli = { version = "0.8.0-rc4" }
-sp-core = { version = "2.0.0-rc4" }
-sc-executor = { version = "0.8.0-rc4" }
-sc-service = { version = "0.8.0-rc4" }
-sp-inherents = { version = "2.0.0-rc4" }
-sc-transaction-pool = { version = "2.0.0-rc4" }
-sp-transaction-pool = { version = "2.0.0-rc4" }
-sc-network = { version = "0.8.0-rc4" }
-sc-consensus-aura = { version = "0.8.0-rc4" }
-sp-consensus-aura = { version = "0.8.0-rc4" }
-sp-consensus = { version = "0.8.0-rc4" }
-sc-consensus = { version = "0.8.0-rc4" }
-sc-finality-grandpa = { version = "0.8.0-rc4" }
-sp-finality-grandpa = { version = "2.0.0-rc4" }
-sc-client-api = { version = "2.0.0-rc4" }
-sp-runtime = { version = "2.0.0-rc4" }
-sc-basic-authorship = { version = "0.8.0-rc4" }
+sc-cli = { version = "0.8.0-rc6", features = ["wasmtime"] }
+sp-core = { version = "2.0.0-rc6" }
+sc-executor = { version = "0.8.0-rc6", features = ["wasmtime"] }
+sc-service = { version = "0.8.0-rc6", features = ["wasmtime"] }
+sp-inherents = { version = "2.0.0-rc6" }
+sc-transaction-pool = { version = "2.0.0-rc6" }
+sp-transaction-pool = { version = "2.0.0-rc6" }
+sc-consensus-aura = { version = "0.8.0-rc6" }
+sp-consensus-aura = { version = "0.8.0-rc6" }
+sp-consensus = { version = "0.8.0-rc6" }
+sc-consensus = { version = "0.8.0-rc6" }
+sc-finality-grandpa = { version = "0.8.0-rc6" }
+sp-finality-grandpa = { version = "2.0.0-rc6" }
+sc-client-api = { version = "2.0.0-rc6" }
+sp-runtime = { version = "2.0.0-rc6" }
 
-node-template-runtime = { version = "2.0.0-rc4", path = "../runtime" }
+# These dependencies are used for the node template's RPCs
+jsonrpc-core = "14.0.3"
+sc-rpc = { version = "2.0.0-rc6" }
+sp-api = { version = "2.0.0-rc6" }
+sc-rpc-api = { version = "0.8.0-rc6" }
+sp-blockchain = { version = "2.0.0-rc6" }
+sp-block-builder = { version = "2.0.0-rc6" }
+sc-basic-authorship = { version = "0.8.0-rc6" }
+substrate-frame-rpc-system = { version = "2.0.0-rc6" }
+pallet-transaction-payment-rpc = { version = "2.0.0-rc6" }
+
+
+node-template-runtime = { version = "2.0.0-rc6", path = "../runtime" }
 
 [build-dependencies]
-vergen = "3.0.4"
-substrate-build-script-utils = { version = "2.0.0-rc4" }
+substrate-build-script-utils = { version = "2.0.0-rc6" }

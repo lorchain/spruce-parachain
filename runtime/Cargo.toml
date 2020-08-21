@@ -1,37 +1,39 @@
 [package]
 name = "node-template-runtime"
-version = "2.0.0-rc4"
+version = "2.0.0-rc6"
 authors = ["Anonymous"]
 edition = "2018"
 license = "Unlicense"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
+serde = { version = "1.0.102", optional = true, features = ["derive"] }
 
-pallet-aura = { version = "2.0.0-rc4", default-features = false }
-pallet-balances = { version = "2.0.0-rc4", default-features = false }
-frame-support = { version = "2.0.0-rc4", default-features = false }
-pallet-grandpa = { version = "2.0.0-rc4", default-features = false }
-pallet-indices = { version = "2.0.0-rc4", default-features = false }
-pallet-randomness-collective-flip = { version = "2.0.0-rc4", default-features = false }
-pallet-sudo = { version = "2.0.0-rc4", default-features = false }
-frame-system = { version = "2.0.0-rc4", default-features = false }
-pallet-timestamp = { version = "2.0.0-rc4", default-features = false }
-pallet-transaction-payment = { version = "2.0.0-rc4", default-features = false }
-frame-executive = { version = "2.0.0-rc4", default-features = false }
-sp-api = { version = "2.0.0-rc4", default-features = false }
-sp-block-builder = { version = "2.0.0-rc4", default-features = false }
-sp-consensus-aura = { version = "0.8.0-rc4", default-features = false }
-sp-core = { version = "2.0.0-rc4", default-features = false }
-sp-inherents = { version = "2.0.0-rc4", default-features = false }
-sp-io = { version = "2.0.0-rc4", default-features = false }
-sp-offchain = { version = "2.0.0-rc4", default-features = false }
-sp-runtime = { version = "2.0.0-rc4", default-features = false }
-sp-session = { version = "2.0.0-rc4", default-features = false }
-sp-std = { version = "2.0.0-rc4", default-features = false }
-sp-transaction-pool = { version = "2.0.0-rc4", default-features = false }
-sp-version = { version = "2.0.0-rc4", default-features = false }
+pallet-aura = { version = "2.0.0-rc6", default-features = false }
+pallet-balances = { version = "2.0.0-rc6", default-features = false }
+frame-support = { version = "2.0.0-rc6", default-features = false }
+pallet-grandpa = { version = "2.0.0-rc6", default-features = false }
+pallet-indices = { version = "2.0.0-rc6", default-features = false }
+pallet-randomness-collective-flip = { version = "2.0.0-rc6", default-features = false }
+pallet-sudo = { version = "2.0.0-rc6", default-features = false }
+frame-system = { version = "2.0.0-rc6", default-features = false }
+pallet-timestamp = { version = "2.0.0-rc6", default-features = false }
+pallet-transaction-payment = { version = "2.0.0-rc6", default-features = false }
+frame-executive = { version = "2.0.0-rc6", default-features = false }
+sp-api = { version = "2.0.0-rc6", default-features = false }
+sp-block-builder = { version = "2.0.0-rc6", default-features = false }
+sp-consensus-aura = { version = "0.8.0-rc6", default-features = false }
+sp-core = { version = "2.0.0-rc6", default-features = false }
+sp-inherents = { version = "2.0.0-rc6", default-features = false }
+sp-io = { version = "2.0.0-rc6", default-features = false }
+sp-offchain = { version = "2.0.0-rc6", default-features = false }
+sp-runtime = { version = "2.0.0-rc6", default-features = false }
+sp-session = { version = "2.0.0-rc6", default-features = false }
+sp-std = { version = "2.0.0-rc6", default-features = false }
+sp-transaction-pool = { version = "2.0.0-rc6", default-features = false }
+sp-version = { version = "2.0.0-rc6", default-features = false }
+frame-system-rpc-runtime-api = { version = "2.0.0-rc6", default-features = false }
+pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-rc6", default-features = false }
 
 # template = { package = "pallet-template", default-features = false, path = "../pallets/template" }
 pallet-token = { path = "../pallets/token", default-features = false }
@@ -40,6 +42,7 @@ pallet-wrap = { path = "../pallets/wrap", default-features = false }
 pallet-cdp = { path = "../pallets/cdp", default-features = false }
 pallet-valley = { path = "../pallets/valley", default-features = false }
 pallet-tao = { path = "../pallets/tao", default-features = false }
+pallet-commodity = { path = "../pallets/commodity", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner" }
@@ -72,6 +75,8 @@ std = [
     "sp-std/std",
     "sp-transaction-pool/std",
     "sp-version/std",
+    "pallet-transaction-payment-rpc-runtime-api/std",
+    "frame-system-rpc-runtime-api/std",
     # "template/std",
     "pallet-token/std",
     "pallet-dex/std",
@@ -79,4 +84,5 @@ std = [
     "pallet-cdp/std",
     "pallet-valley/std",
     "pallet-tao/std",
+    "pallet-commodity/std",
 ]

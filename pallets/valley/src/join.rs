@@ -29,7 +29,7 @@ pub fn bei_join<T: Trait>(sender: T::AccountId, account: T::AccountId, amount: T
 	let bei_token_id = Module::<T>::bei_token_id();
 
 	cdp::Module::<T>::transfer_bei(module_account, account, amount);
-	token::Module::<T>::burn(sender, bei_token_id, amount);
+	token::Module::<T>::burn(bei_token_id, &sender, amount);
 }
 
 pub fn bei_exit<T: Trait>(sender: T::AccountId, account: T::AccountId, amount: T::TokenBalance) {
@@ -37,5 +37,5 @@ pub fn bei_exit<T: Trait>(sender: T::AccountId, account: T::AccountId, amount: T
 	let bei_token_id = Module::<T>::bei_token_id();
 
 	cdp::Module::<T>::transfer_bei(sender, module_account, amount);
-	token::Module::<T>::mint(account, bei_token_id, amount);
+	token::Module::<T>::mint(bei_token_id, &account, amount);
 }

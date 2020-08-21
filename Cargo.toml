@@ -9,6 +9,7 @@ members = [
     "pallets/tao",
     "pallets/cdp",
     "pallets/valley",
+    "pallets/commodity",
 ]
 
 [profile.release]
