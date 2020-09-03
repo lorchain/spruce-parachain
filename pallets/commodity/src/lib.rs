@@ -46,8 +46,15 @@ decl_event!(
 	pub enum Event<T> where
 		AccountId = <T as frame_system::Trait>::AccountId,
 		CommodityId = <T as Trait>::CommodityId,
+		TokenId = <T as token::Trait>::TokenId,
+		Amount = <T as token::Trait>::TokenBalance,
 	{
 		CommodityCreated(AccountId, CommodityId),
+		AddStakeToCommodity(AccountId, CommodityId, Amount),
+		RemoveStakeToCommodity(AccountId, CommodityId, Amount),
+		Mint(AccountId, CommodityId, AccountId, Amount),
+		Burn(AccountId, CommodityId, TokenId, Amount),
+		Redeem(AccountId, CommodityId, TokenId, Amount),
 	}
 );
 
@@ -112,6 +119,7 @@ decl_module! {
 			commodity.stake_balance += amount;
 			Commodities::<T>::insert(commodity_id, commodity);
 
+			Self::deposit_event(RawEvent::AddStakeToCommodity(sender, commodity_id, amount));
 			Ok(())
 		}
 
@@ -129,6 +137,7 @@ decl_module! {
 			commodity.stake_balance -= amount;
 			Commodities::<T>::insert(commodity_id, commodity);
 
+			Self::deposit_event(RawEvent::RemoveStakeToCommodity(sender, commodity_id, amount));
 			Ok(())
 		}
 
@@ -143,16 +152,17 @@ decl_module! {
 			commodity.stake_balance -= expected_available;
 			commodity.stake_minted += amount;
 
-			tao::Module::<T>::do_mint(commodity.tao, commodity.token, to, amount)?;
+			tao::Module::<T>::do_mint(commodity.tao, commodity.token, to.clone(), amount)?;
 
+			Self::deposit_event(RawEvent::Mint(sender, commodity_id, to, amount));
 			Ok(())
 		}
 
 		#[weight = 0]
-		pub fn burn(origin, commodity_id: T::CommodityId, commodity_token: T::TokenId, amount: T::TokenBalance) -> dispatch::DispatchResult {
+		pub fn burn(origin, commodity_id: T::CommodityId, commodity_item: T::TokenId, amount: T::TokenBalance) -> dispatch::DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			// TODO: check commodity_token for this commodity and burn time
+			// TODO: check commodity_item for this commodity and burn time
 
 			let mut commodity = Self::commodities(commodity_id).ok_or(Error::<T>::InvalidCommodityId)?;
 			let expected_available = Self::require_amount(commodity.stake_rate, amount);
@@ -161,13 +171,14 @@ decl_module! {
 			commodity.stake_balance += expected_available;
 			commodity.stake_minted -= amount;
 
-			tao::Module::<T>::do_burn(commodity.tao, commodity_token, sender, amount)?;
+			tao::Module::<T>::do_burn(commodity.tao, commodity_item, sender.clone(), amount)?;
 
+			Self::deposit_event(RawEvent::Burn(sender, commodity_id, commodity_item, amount));
 			Ok(())
 		}
 
 		#[weight = 0]
-		pub fn redeem(origin, commodity_id: T::CommodityId, commodity_token: T::TokenId, amount: T::TokenBalance) -> dispatch::DispatchResult {
+		pub fn redeem(origin, commodity_id: T::CommodityId, commodity_item: T::TokenId, amount: T::TokenBalance) -> dispatch::DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			// TODO: check commodity redeem time
@@ -183,11 +194,12 @@ decl_module! {
 
 			let bei_token_id = valley::Module::<T>::bei_token_id();
 
-			tao::Module::<T>::do_burn(commodity.tao, commodity_token, sender.clone(), amount)?;
+			tao::Module::<T>::do_burn(commodity.tao, commodity_item, sender.clone(), amount)?;
 			token::Module::<T>::do_safe_transfer_from(commodity.account.clone(), sender.clone(), bei_token_id, token_to_bei)?;
 
 			Commodities::<T>::insert(commodity_id, commodity);
 
+			Self::deposit_event(RawEvent::Redeem(sender, commodity_id, commodity_item, amount));
 			Ok(())
 		}
 
