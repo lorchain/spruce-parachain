@@ -241,21 +241,20 @@ impl<T: Trait> Module<T> {
 		type_id
 	}
 	
-	pub fn mint_non_fungible(
+	fn mint_non_fungible(
 		token_id: &T::TokenId,
 		accounts: &Vec<T::AccountId>,
+		amounts: Vec<T::TokenBalance>,
 	) -> Result<(), DispatchError> {
-		ensure!(Self::is_non_fungible(token_id), Error::<T>::RequireNonFungible);
-
 		let type_id = Self::get_type_id(token_id);
-		ensure!(*token_id == type_id, Error::<T>::InvalidNonFungibleId);
 
 		let index = Self::nf_index(type_id).checked_add(<u128 as One>::one()).expect("NF index error");
 		NFIndex::<T>::mutate(type_id, |index| *index += accounts.len() as u128);
 
 		for i in 0..accounts.len() {
 			let to = &accounts[i];
-			let amount = T::TokenBalance::from(1);
+			// let amount = T::TokenBalance::from(1);
+			let amount = amounts[i];
 			let id = Self::get_token_id(&type_id, index + i as u128);
 
 			Balances::<T>::mutate(type_id, to, |balance| *balance = balance.saturating_add(amount));
@@ -267,12 +266,11 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	pub fn mint_fungible(
+	fn mint_fungible(
 		token_id: &T::TokenId,
 		accounts: &Vec<T::AccountId>,
 		amounts: Vec<T::TokenBalance>,
 	) -> Result<(), DispatchError> {
-		ensure!(!Self::is_non_fungible(token_id), Error::<T>::RequireFungible);
 		ensure!(accounts.len() == amounts.len(), Error::<T>::LengthMismatch);
 
 		for i in 0..accounts.len() {
@@ -293,7 +291,7 @@ impl<T: Trait> Module<T> {
 		let is_nf = Self::is_non_fungible(token_id);
 
 		if is_nf {
-			Self::mint_non_fungible(token_id, &[ account.clone() ].to_vec());
+			Self::mint_non_fungible(token_id, &[ account.clone() ].to_vec(), [ amount ].to_vec());
 		} else {
 			Self::mint_fungible(token_id, &[ account.clone() ].to_vec(), [ amount ].to_vec());
 		}
@@ -306,7 +304,7 @@ impl<T: Trait> Module<T> {
 		let is_nf = Self::is_non_fungible(token_id);
 
 		if is_nf {
-			Self::mint_non_fungible(token_id, &accounts);
+			Self::mint_non_fungible(token_id, &accounts, amounts);
 		} else {
 			Self::mint_fungible(token_id, &accounts, amounts);
 		}
