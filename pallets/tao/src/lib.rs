@@ -40,9 +40,8 @@ decl_storage! {
 		pub Taos get(fn taos): map hasher(blake2_128_concat) T::TaoId => Option<Tao<T::AccountId>>;
 		pub NextTaoId get(fn next_tao_id): T::TaoId;
 
-		// pub OwnedTaos get(fn owned_taos): map hasher(blake2_128_concat) (T::AccountId, T::Index) => T::TaoId;
-		// pub OwnedTaoCount get(fn owned_tao_count): T::Index;
-		// pub OwnedTaoIndex get(fn owned_tao_index): map hasher(blake2_128_concat) T::TaoId => T::Index;
+		pub OwnedTaos get(fn owned_taos): map hasher(blake2_128_concat) (T::AccountId, T::Index) => T::TaoId;
+		pub OwnedTaoIndex get(fn owned_tao_index): map hasher(blake2_128_concat) T::AccountId => T::Index;
 
 		pub TaoCommodities get(fn tao_commodities):
 			double_map hasher(twox_64_concat) T::TaoId, hasher(blake2_128_concat) T::Index => Option<Commodity<T::AccountId, T::CommodityId, T::TaoId>>;
@@ -91,6 +90,10 @@ decl_module! {
 
 			Taos::<T>::insert(tao_id, tao);
 			NextTaoId::<T>::mutate(|id| *id += <T::TaoId as One>::one());
+
+			let owned_tao_index = Self::owned_tao_index(sender.clone());
+			OwnedTaos::<T>::insert((sender.clone(), owned_tao_index), tao_id);
+			OwnedTaoIndex::<T>::mutate(sender.clone(), |index| *index += One::one());
 
 			Self::deposit_event(RawEvent::TaoCreated(tao_id, sender));
 
