@@ -14,8 +14,9 @@ use sp_runtime::{
 use sp_std::{prelude::*, cmp, fmt::Debug, result};
 
 /// The pallet's configuration trait.
-pub trait Trait: frame_system::Trait + pallet_timestamp::Trait + valley::Trait {
+pub trait Trait: frame_system::Trait + pallet_timestamp::Trait + token::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type ModuleId: Get<ModuleId>;
 	type CommodityId: Parameter + Member + AtLeast32Bit + Bounded + Default + Copy;
 }
 

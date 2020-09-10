@@ -272,8 +272,9 @@ impl pallet_token::Trait for Runtime {
 
 parameter_types! {
 	pub const DexModuleId: ModuleId = ModuleId(*b"spru/dex");
-	pub const WrapModuleId: ModuleId = ModuleId(*b"spr/wrap");
+	pub const WrapModuleId: ModuleId = ModuleId(*b"spru/wra");
 	pub const ValleyModuleId: ModuleId = ModuleId(*b"spru/val");
+	pub const CommodityModuleId: ModuleId = ModuleId(*b"spru/com");
 }
 
 impl pallet_dex::Trait for Runtime {
@@ -299,6 +300,7 @@ impl pallet_valley::Trait for Runtime {
 
 impl pallet_commodity::Trait for Runtime {
 	type Event = Event;
+	type ModuleId = CommodityModuleId;
 	type CommodityId = u32;
 }
 
