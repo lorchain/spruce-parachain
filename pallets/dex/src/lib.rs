@@ -142,8 +142,8 @@ decl_module! {
 
 			let pair = Self::pairs(pair_id).ok_or(Error::<T>::InvalidPairId)?;
 
-			token::Module::<T>::do_safe_transfer_from(sender.clone(), pair.account.clone(), token_a, amount_a);
-			token::Module::<T>::do_safe_transfer_from(sender.clone(), pair.account.clone(), token_b, amount_b);
+			token::Module::<T>::do_safe_transfer_from(&token_a, &sender, &pair.account, amount_a);
+			token::Module::<T>::do_safe_transfer_from(&token_b, &sender, &pair.account, amount_b);
 			let liquidity = Self::mint(pair_id, to)?;
 
 			Ok(())
@@ -166,7 +166,7 @@ decl_module! {
 
 			let pair = Self::pairs(pair_id).ok_or(Error::<T>::InvalidPairId)?;
 
-			token::Module::<T>::do_safe_transfer_from(sender.clone(), pair.account.clone(), pair.pair_token, liquidity);
+			token::Module::<T>::do_safe_transfer_from(&pair.pair_token, &sender, &pair.account, liquidity);
 			let (amount_0, amount_1) = Self::burn(pair_id, to)?;
 			let (token_0, token_1) = Self::sort_tokens(token_a, token_b);
 			let (amount_a, amount_b) = if token_a == token_0 { (amount_0, amount_1) } else { (amount_1, amount_0) };
@@ -195,7 +195,7 @@ decl_module! {
 			let amounts = Self::get_amounts_out(pair_id, amount_in, &path)?;
 			ensure!(amounts[amounts.len() - 1] >= amount_out_min, Error::<T>::InsufficientOutAmount);
 
-			token::Module::<T>::do_safe_transfer_from(sender.clone(), pair.account.clone(), path[0], amounts[0]);
+			token::Module::<T>::do_safe_transfer_from(&path[0], &sender, &pair.account, amounts[0]);
 			Self::do_swap(pair_id, amounts, path, to);
 
 			Ok(())
@@ -219,7 +219,7 @@ decl_module! {
 			let amounts = Self::get_amounts_out(pair_id, amount_out, &path)?;
 			ensure!(amounts[0] <= amount_in_max, Error::<T>::InsufficientInputAmount);
 
-			token::Module::<T>::do_safe_transfer_from(sender.clone(), pair.account.clone(), path[0], amounts[0]);
+			token::Module::<T>::do_safe_transfer_from(&path[0], &sender, &pair.account, amounts[0]);
 			Self::do_swap(pair_id, amounts, path, to);
 
 			Ok(())
@@ -285,14 +285,14 @@ impl<T: Trait> Module<T> {
 		ensure!(amount_0_out < reserve_0 && amount_1_out < reserve_1, Error::<T>::InsufficientLiquidity);
 
 		if amount_0_out > Zero::zero() {
-			token::Module::<T>::do_safe_transfer_from(pair.account.clone(), to.clone(), pair.token_a, amount_0_out);
+			token::Module::<T>::do_safe_transfer_from(&pair.token_a, &pair.account, &to, amount_0_out);
 		}
 		if amount_1_out > Zero::zero() {
-			token::Module::<T>::do_safe_transfer_from(pair.account.clone(), to.clone(), pair.token_b, amount_1_out);
+			token::Module::<T>::do_safe_transfer_from(&pair.token_b, &pair.account, &to, amount_1_out);
 		}
 
-		let balance_0 = token::Module::<T>::balance_of((pair.token_a, pair.account.clone()));
-		let balance_1 = token::Module::<T>::balance_of((pair.token_b, pair.account.clone()));
+		let balance_0 = token::Module::<T>::balances(pair.token_a, pair.account.clone());
+		let balance_1 = token::Module::<T>::balances(pair.token_b, pair.account.clone());
 
 		let amount_0_in = Self::init_amount_in(balance_0, reserve_0, amount_0_out);
 		let amount_1_in = Self::init_amount_in(balance_1, reserve_1, amount_1_out);
@@ -317,8 +317,8 @@ impl<T: Trait> Module<T> {
 
 		let (reserve_a, reserve_b, _) = Reserves::<T>::get(pair_id);
 
-		let balance_a = token::Module::<T>::balance_of((pair.token_a, pair.account.clone()));
-		let balance_b = token::Module::<T>::balance_of((pair.token_b, pair.account.clone()));
+		let balance_a = token::Module::<T>::balances(pair.token_a, pair.account.clone());
+		let balance_b = token::Module::<T>::balances(pair.token_b, pair.account.clone());
 
 		let amount_a = balance_a - reserve_a;
 		let amount_b = balance_b - reserve_b;
@@ -328,12 +328,12 @@ impl<T: Trait> Module<T> {
 		let total_supply = token::Module::<T>::total_supply(pair.pair_token);
 		if total_supply == Zero::zero() {
 			liquidity = ((amount_a * amount_b) * (amount_a * amount_b)) - MINIMUM_LIQUIDITY.into();
-			token::Module::<T>::mint(pair.pair_token, &T::AccountId::default(), MINIMUM_LIQUIDITY.into()); // permanently lock the first MINIMUM_LIQUIDITY tokens
+			token::Module::<T>::mint(&pair.pair_token, &T::AccountId::default(), MINIMUM_LIQUIDITY.into()); // permanently lock the first MINIMUM_LIQUIDITY tokens
 		} else {
 			liquidity = cmp::min(amount_a * total_supply / reserve_a, amount_b * total_supply / reserve_b);
 		}
 		ensure!(liquidity >= Zero::zero(), Error::<T>::InsufficientLiquidityMinted);
-		token::Module::<T>::mint(pair.pair_token, &to, liquidity);
+		token::Module::<T>::mint(&pair.pair_token, &to, liquidity);
 
 		Self::do_update(pair_id, balance_a, balance_b, reserve_a, reserve_b);
 
@@ -349,10 +349,10 @@ impl<T: Trait> Module<T> {
 
 		let (reserve_a, reserve_b, _) = Reserves::<T>::get(pair_id);
 
-		let mut balance_a = token::Module::<T>::balance_of((pair.token_a, pair.account.clone()));
-		let mut balance_b = token::Module::<T>::balance_of((pair.token_b, pair.account.clone()));
+		let mut balance_a = token::Module::<T>::balances(pair.token_a, pair.account.clone());
+		let mut balance_b = token::Module::<T>::balances(pair.token_b, pair.account.clone());
 
-		let liquidity = token::Module::<T>::balance_of((pair.pair_token, pair.account.clone()));
+		let liquidity = token::Module::<T>::balances(pair.pair_token, pair.account.clone());
 
 		let total_supply = token::Module::<T>::total_supply(pair.pair_token);
 		
@@ -360,12 +360,12 @@ impl<T: Trait> Module<T> {
 		let amount_b = liquidity * balance_b / total_supply;
 		ensure!(amount_a > Zero::zero() && amount_b > Zero::zero(), Error::<T>::InsufficientLiquidityBurned);
 
-		token::Module::<T>::burn(pair.pair_token, &pair.account, liquidity);
-		token::Module::<T>::do_safe_transfer_from(pair.account.clone(), to.clone(), pair.token_a, amount_a);
-		token::Module::<T>::do_safe_transfer_from(pair.account.clone(), to.clone(), pair.token_b, amount_b);
+		token::Module::<T>::burn(&pair.pair_token, &pair.account, liquidity);
+		token::Module::<T>::do_safe_transfer_from(&pair.token_a, &pair.account, &to, amount_a);
+		token::Module::<T>::do_safe_transfer_from(&pair.token_b, &pair.account, &to, amount_b);
 
-		balance_a = token::Module::<T>::balance_of((pair.token_a, pair.account.clone()));
-		balance_b = token::Module::<T>::balance_of((pair.token_b, pair.account.clone()));
+		balance_a = token::Module::<T>::balances(pair.token_a, pair.account.clone());
+		balance_b = token::Module::<T>::balances(pair.token_b, pair.account.clone());
 
 		Self::do_update(pair_id, balance_a, balance_b, reserve_a, reserve_b);
 

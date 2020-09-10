@@ -6,10 +6,10 @@ members = [
     "pallets/token",
     "pallets/wrap",
     "pallets/dex",
-    "pallets/tao",
     "pallets/cdp",
     "pallets/valley",
     "pallets/commodity",
+    "pallets/tao",
 ]
 
 [profile.release]

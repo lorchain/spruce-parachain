@@ -4,14 +4,14 @@ use codec::{Encode, Decode};
 use frame_support::{
 	debug, decl_module, decl_storage, decl_error, decl_event, ensure, StorageValue, StorageMap, Parameter,
 	traits::Randomness,
-	dispatch,
+	dispatch::{DispatchResult, DispatchError},
 };
 use sp_io::hashing::blake2_128;
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{traits::{
 	AtLeast32Bit, MaybeSerializeDeserialize, MaybeDisplay, Bounded, Member,
-	SimpleBitOps, CheckEqual, MaybeSerialize, MaybeMallocSizeOf, Hash, One,
-	Zero, AtLeast32BitUnsigned,
+	SimpleBitOps, MaybeSerialize, Hash, One, Saturating,
+	Zero, AtLeast32BitUnsigned, CheckedAdd, CheckedSub,
 }};
 use sp_std::fmt::Debug;
 use sp_std::prelude::*;
@@ -19,40 +19,22 @@ use sp_std::vec::Vec;
 
 /// The module's configuration trait.
 pub trait Trait: frame_system::Trait {
-	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-	/// Currency of this module
 	// type Currency: Currency<Self::AccountId>;
 	type Randomness: Randomness<Self::Hash>;
-	// type TokenId: Parameter + Member + Default + Copy;
-
-	// type TokenBalance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy
-	//     + MaybeSerializeDeserialize;
 	
 	type TokenBalance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug +
 		MaybeSerializeDeserialize + From<u128> + Into<u128>;
     
     type TokenId: Parameter + Member + Debug + Default + Copy + Ord
 		+ MaybeSerializeDeserialize + From<[u8;32]> + Into<[u8;32]>;
-
-	type TokenType: Parameter + Member + Debug + Default + Copy + Ord
-        + MaybeSerializeDeserialize + From<[u8;16]> + Into<[u8;16]>;
-
-	// type TokenIndex: Parameter + Member + AtLeast32Bit + Default + Copy
-    //     + MaybeSerializeDeserialize;
-
-	// type TokenId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
-	// + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
 }
-
-// pub type TokenId<T> = <T as frame_system::Trait>::Hash;
-// pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct Token<T> where
 	T: Trait
 {
-	token_id: T::TokenId,
+	id: T::TokenId,
 	creator: T::AccountId,
 	is_nf: bool,
 	uri: Vec<u8>,
@@ -60,12 +42,15 @@ pub struct Token<T> where
 
 decl_storage! {
     trait Store for Module<T: Trait> as TokenModule {
-		pub Tokens get(fn tokens): map hasher(blake2_128_concat) T::TokenType => Option<Token<T>>;
+		pub Tokens get(fn tokens): map hasher(blake2_128_concat) T::TokenId => Option<Token<T>>;
 		pub TokenCount get(fn token_count): u64;
-		pub NFIndex get(fn nf_index): map hasher(blake2_128_concat) T::TokenType => u128;
+		pub NFIndex get(fn nf_index): map hasher(blake2_128_concat) T::TokenId => u128;
 
 		// ERC1155
-		pub Balances get(fn balance_of): map hasher(blake2_128_concat) (T::TokenId, T::AccountId) => T::TokenBalance;
+		pub Balances get(fn balances):
+			double_map hasher(twox_64_concat) T::TokenId, hasher(blake2_128_concat) T::AccountId => T::TokenBalance;
+		pub Allowances get(fn allowances):
+			double_map  hasher(twox_64_concat) T::TokenId, hasher(blake2_128_concat) (T::AccountId, T::AccountId) => T::TokenBalance;
 		pub OperatorApproval get(fn operator_approval): map hasher(blake2_128_concat) (T::AccountId, T::AccountId) => bool;
 		pub TotalSupply get(fn total_supply): map hasher(blake2_128_concat) T::TokenId => T::TokenBalance;
 	}
@@ -74,10 +59,13 @@ decl_storage! {
 decl_error! {
 	pub enum Error for Module<T: Trait> {
 		InvalidTokenId,
+		InvalidNonFungibleId,
 		RequireNonFungible,
 		RequireFungible,
 		LengthMismatch,
-		InsufficientFunds,
+		InsufficientBalance,
+		TransferSameAccount,
+		TokenNotExists,
 	}
 }
 
@@ -92,7 +80,7 @@ decl_event!(
 		MintFungible(TokenId, AccountId, TokenBalance),
 		Burn(TokenId, AccountId, TokenBalance),
 		BurnBatch(TokenId, Vec<AccountId>, Vec<TokenBalance>),
-		Transfer(AccountId, AccountId, TokenId, TokenBalance),
+		Transferred(TokenId, AccountId, AccountId, TokenBalance),
         Approval(AccountId, AccountId, TokenBalance),
     }
 );
@@ -105,7 +93,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = 0]
-        fn set_approval_for_all(origin, operator: T::AccountId, approved: bool) -> dispatch::DispatchResult {
+        fn set_approval_for_all(origin, operator: T::AccountId, approved: bool) -> DispatchResult {
            let sender = ensure_signed(origin)?;
 
 		   OperatorApproval::<T>::mutate((sender, operator), |approval| *approval = approved);
@@ -119,11 +107,11 @@ decl_module! {
 			to: T::AccountId,
 			id: T::TokenId,
 			amount: T::TokenBalance
-		) -> dispatch::DispatchResult 
+		) -> DispatchResult 
 		{
 			let sender = ensure_signed(origin)?;
 
-			Self::do_safe_transfer_from(sender, to, id, amount)?;
+			Self::do_safe_transfer_from(&id, &sender, &to, amount)?;
 
 			Ok(())
 		}
@@ -134,7 +122,7 @@ decl_module! {
 			to: T::AccountId,
 			ids: Vec<T::TokenId>,
 			amounts: Vec<T::TokenBalance>
-		) -> dispatch::DispatchResult 
+		) -> DispatchResult 
 		{
 			let sender = ensure_signed(origin)?;
 
@@ -142,14 +130,14 @@ decl_module! {
 				let id = ids[i];
 				let amount = amounts[i];
 
-				Self::do_safe_transfer_from(sender.clone(), to.clone(), id, amount)?;
+				Self::do_safe_transfer_from(&id, &sender, &to, amount)?;
 			}
 
 			Ok(())
 		}
 
 		#[weight = 0]
-		fn debug_create_token(origin, is_nf: bool) -> dispatch::DispatchResult {
+		fn debug_create_token(origin, is_nf: bool) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			debug::info!("run into crate token");
@@ -161,227 +149,235 @@ decl_module! {
 			Ok(())
 		}
 
-		#[weight = 0]
-		fn debug_mint_nf(origin, token_id: T::TokenId, to: Vec<T::AccountId>) -> dispatch::DispatchResult {
-			let sender = ensure_signed(origin)?;
+		// #[weight = 0]
+		// fn debug_mint_nf(origin, token_id: T::TokenId, to: Vec<T::AccountId>) -> DispatchResult {
+		// 	let sender = ensure_signed(origin)?;
 
-			debug::info!("run into mint nf");
+		// 	debug::info!("run into mint nf");
 
-			Self::mint_non_fungible(token_id, &to)?;
+		// 	Self::mint_non_fungible(token_id, &to)?;
 
-			Ok(())
-		}
+		// 	Ok(())
+		// }
 
-		#[weight = 0]
-		fn debug_mint_f(origin, token_id: T::TokenId, to: Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> dispatch::DispatchResult {
-			let sender = ensure_signed(origin)?;
+		// #[weight = 0]
+		// fn debug_mint_f(origin, token_id: T::TokenId, to: Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> DispatchResult {
+		// 	let sender = ensure_signed(origin)?;
 
-			debug::info!("run into mint nf");
+		// 	debug::info!("run into mint nf");
 
-			Self::mint_fungible(token_id, &to, amounts)?;
+		// 	Self::mint_fungible(token_id, &to, amounts)?;
 
-			Ok(())
-		}
+		// 	Ok(())
+		// }
 
     }
 }
 
 impl<T: Trait> Module<T> {
-	// fn get_token_type(sender: &T::AccountId) -> T::TokenType {
-	// 	let payload = (
-	// 		T::Randomness::random_seed(),
-	// 		&sender,
-	// 		<frame_system::Module<T>>::extrinsic_index(),
-	// 	);
-
-	// 	let random = payload.using_encoded(blake2_128);
-
-	// 	let mut array = [0; 32];
-	// 	array[..16].copy_from_slice(&random[..]);
-	// 	debug::info!("array is {:?}", array);
-
-	// 	array.into()
-	// }
-
-	fn random_type(sender: &T::AccountId) -> T::TokenType {
+	fn random_type_id(sender: &T::AccountId) -> T::TokenId {
 		let payload = (
 			T::Randomness::random_seed(),
 			&sender,
 			<frame_system::Module<T>>::extrinsic_index(),
 		);
 
-		payload.using_encoded(blake2_128).into()
+		let random = payload.using_encoded(blake2_128);
+
+		let mut array = [0; 32];
+		array[..16].copy_from_slice(&random[..]);
+		// debug::info!("array is {:?}", array);
+
+		array.into()
 	}
 
-	fn get_token_id(token_type: T::TokenType, index: u128) -> T::TokenId {
-		let type_bytes = token_type.into();
+	fn get_token_id(type_id: &T::TokenId, index: u128) -> T::TokenId {
+		// let id_bytes = type_id.into();
+		let id_bytes = type_id.clone().into();
 		let index_bytes = index.to_be_bytes();
 
 		let mut array = [0 as u8; 32];
-		array[..16].copy_from_slice(&type_bytes[..16]);
+		array[..16].copy_from_slice(&id_bytes[..16]);
 		array[16..].copy_from_slice(&index_bytes[..16]);
 
 		array.into()
 	}
 
-	fn convert_id_to_type(token_id: T::TokenId) -> T::TokenType {
-		let id_bytes = token_id.into();
+	fn get_type_id(token_id: &T::TokenId) -> T::TokenId {
+		// let id_bytes = token_id.into();
+		let id_bytes = token_id.clone().into();
 
-		let mut type_array = [0 as u8; 16];
-		type_array.copy_from_slice(&id_bytes[..16]);
+		let mut array = [0 as u8; 32];
+		array[..16].copy_from_slice(&id_bytes[..16]);
 
-		type_array.into()
+		array.into()
 	}
 
-	pub fn is_nf_token(token_id: T::TokenId) -> bool {
-		let token_type = Self::convert_id_to_type(token_id);
-		let token = Self::tokens(token_type).unwrap();
+	pub fn is_non_fungible(token_id: &T::TokenId) -> bool {
+		let type_id = Self::get_type_id(token_id);
+		let token = Self::tokens(type_id).unwrap();
 		token.is_nf
 	}
 
-	pub fn create_token(who: &T::AccountId, is_nf: bool, uri: Vec<u8>) -> T::TokenId {
-		let token_type = Self::random_type(&who);
-		let token_id = Self::get_token_id(token_type, 0 as u128);
+	pub fn exists(token_id: &T::TokenId) -> bool {
+		Self::tokens(token_id).is_some()
+	}
 
-		debug::info!("is nf {}", is_nf);
+	pub fn create_token(who: &T::AccountId, is_nf: bool, uri: Vec<u8>) -> T::TokenId {
+		let type_id = Self::random_type_id(&who);
 
 		let token = Token::<T> {
-			token_id,
+			id: type_id,
 			creator: who.clone(),
 			is_nf,
 			uri: uri.clone(),
 		};
 
-		Tokens::<T>::insert(token_type, token);
+		Tokens::<T>::insert(type_id, token);
 		TokenCount::mutate(|id| *id += <u64 as One>::one());
 
-		Self::deposit_event(RawEvent::Created(who.clone(), token_id));
+		Self::deposit_event(RawEvent::Created(who.clone(), type_id));
 
-		token_id
+		type_id
 	}
 	
 	pub fn mint_non_fungible(
-		token_id: T::TokenId,
-		to: &Vec<T::AccountId>,
-	) -> Result<Vec<T::TokenId>, dispatch::DispatchError> {
-		let token_type = Self::convert_id_to_type(token_id);
-		
-		let token = Self::tokens(token_type).ok_or(Error::<T>::InvalidTokenId)?;
-		ensure!(token.is_nf == true, Error::<T>::RequireNonFungible);
+		token_id: &T::TokenId,
+		accounts: &Vec<T::AccountId>,
+	) -> Result<(), DispatchError> {
+		ensure!(Self::is_non_fungible(token_id), Error::<T>::RequireNonFungible);
 
-		let index = Self::nf_index(token_type).checked_add(<u128 as One>::one()).unwrap();
-		NFIndex::<T>::mutate(token_type, |index| *index += to.len() as u128);
+		let type_id = Self::get_type_id(token_id);
+		ensure!(*token_id == type_id, Error::<T>::InvalidNonFungibleId);
 
-		let nf_id = Self::get_token_id(token_type, 0 as u128);
+		let index = Self::nf_index(type_id).checked_add(<u128 as One>::one()).expect("NF index error");
+		NFIndex::<T>::mutate(type_id, |index| *index += accounts.len() as u128);
 
-		debug::info!("index is {}", index);
-		debug::info!("to len is {}", to.len());
-
-		let mut id_vec = Vec::new();
-
-		for i in 0..to.len() {
-			let account = &to[i];
+		for i in 0..accounts.len() {
+			let to = &accounts[i];
 			let amount = T::TokenBalance::from(1);
-			let id = Self::get_token_id(token_type, index + i as u128);
-			id_vec.push(id);
+			let id = Self::get_token_id(&type_id, index + i as u128);
 
-			Balances::<T>::mutate((id, account), |balance| *balance += amount.clone());
-			TotalSupply::<T>::mutate(id, |supply| *supply += amount.clone());
-			
-			TotalSupply::<T>::mutate(nf_id, |supply| *supply += amount);
+			Balances::<T>::mutate(type_id, to, |balance| *balance = balance.saturating_add(amount));
+			TotalSupply::<T>::mutate(type_id, |supply| *supply = supply.saturating_add(amount));
 
-			Self::deposit_event(RawEvent::MintNonFungible(token_id, account.clone(), id));
+			Self::deposit_event(RawEvent::MintNonFungible(type_id, to.clone(), id));
 		}
 
-		Ok(id_vec)
+		Ok(())
 	}
 
 	pub fn mint_fungible(
-		token_id: T::TokenId,
-		to: &Vec<T::AccountId>,
+		token_id: &T::TokenId,
+		accounts: &Vec<T::AccountId>,
 		amounts: Vec<T::TokenBalance>,
-	) -> Result<(), dispatch::DispatchError> {
-		ensure!(to.len() == amounts.len(), Error::<T>::LengthMismatch);
+	) -> Result<(), DispatchError> {
+		ensure!(!Self::is_non_fungible(token_id), Error::<T>::RequireFungible);
+		ensure!(accounts.len() == amounts.len(), Error::<T>::LengthMismatch);
 
-		let token_type = Self::convert_id_to_type(token_id);
-
-		let token = Self::tokens(token_type).ok_or(Error::<T>::InvalidTokenId)?;
-		ensure!(token.is_nf == false, Error::<T>::RequireFungible);
-
-		debug::info!("to len is {}", to.len());
-
-		for i in 0..to.len() {
-			let account = &to[i];
+		for i in 0..accounts.len() {
+			let to = &accounts[i];
 			let amount = amounts[i];
 
-			Balances::<T>::mutate((token_id, account), |balance| *balance += amount.clone());
-			TotalSupply::<T>::mutate(token_id, |supply| *supply += amount);
+			Balances::<T>::mutate(token_id, to, |balance| *balance = balance.saturating_add(amount));
+			TotalSupply::<T>::mutate(token_id, |supply| *supply = supply.saturating_add(amount));
 
-			Self::deposit_event(RawEvent::MintFungible(token_id, account.clone(), amount));
+			Self::deposit_event(RawEvent::MintFungible(*token_id, to.clone(), amount));
 		}
 
 		Ok(())
 	}
 
-	pub fn mint(token_id: T::TokenId, to: &T::AccountId, amount: T::TokenBalance) -> Result<(), dispatch::DispatchError>  {
-		let is_nf = Self::is_nf_token(token_id);
+	pub fn mint(token_id: &T::TokenId, account: &T::AccountId, amount: T::TokenBalance) -> Result<(), DispatchError>  {
+		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
+		let is_nf = Self::is_non_fungible(token_id);
 
 		if is_nf {
-			Self::mint_non_fungible(token_id, &[ to.clone() ].to_vec());
+			Self::mint_non_fungible(token_id, &[ account.clone() ].to_vec());
 		} else {
-			Self::mint_fungible(token_id, &[ to.clone() ].to_vec(), [ amount ].to_vec());
+			Self::mint_fungible(token_id, &[ account.clone() ].to_vec(), [ amount ].to_vec());
 		}
 
 		Ok(())
 	}
 
-	pub fn mint_batch(token_id: T::TokenId, to: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), dispatch::DispatchError>  {
-		let is_nf = Self::is_nf_token(token_id);
+	pub fn mint_batch(token_id: &T::TokenId, accounts: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), DispatchError>  {
+		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
+		let is_nf = Self::is_non_fungible(token_id);
 
 		if is_nf {
-			Self::mint_non_fungible(token_id, &to);
+			Self::mint_non_fungible(token_id, &accounts);
 		} else {
-			Self::mint_fungible(token_id, &to, amounts);
+			Self::mint_fungible(token_id, &accounts, amounts);
 		}
 
 		Ok(())
 	}
 
-	pub fn burn(token_id: T::TokenId, to: &T::AccountId, amount: T::TokenBalance) -> Result<(), dispatch::DispatchError>  {
-		Balances::<T>::mutate((token_id, to), |balance| *balance -= amount.clone());
-		TotalSupply::<T>::mutate(token_id, |supply| *supply -= amount);
+	pub fn burn(token_id: &T::TokenId, account: &T::AccountId, amount: T::TokenBalance) -> Result<(), DispatchError>  {
+		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
 
-		Self::deposit_event(RawEvent::Burn(token_id, to.clone(), amount));
+		if Self::is_non_fungible(token_id) {
+			let type_id = Self::get_type_id(token_id);
+
+			Balances::<T>::mutate(type_id, account, |balance| *balance = balance.saturating_sub(amount));
+			TotalSupply::<T>::mutate(type_id, |supply| *supply = supply.saturating_sub(amount));
+		} else {
+			Balances::<T>::mutate(token_id, account, |balance| *balance = balance.saturating_sub(amount));
+			TotalSupply::<T>::mutate(token_id, |supply| *supply = supply.saturating_sub(amount));
+		}
+
+		Self::deposit_event(RawEvent::Burn(*token_id, account.clone(), amount));
 
 		Ok(())
 	}
 
-	pub fn burn_batch(token_id: T::TokenId, to: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), dispatch::DispatchError>  {
-		for i in 0..to.len() {
-			let account = &to[i];
+	pub fn burn_batch(token_id: &T::TokenId, accounts: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), DispatchError>  {
+		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
+
+		for i in 0..accounts.len() {
+			let to = &accounts[i];
 			let amount = amounts[i];
 
-			Balances::<T>::mutate((token_id, account), |balance| *balance -= amount.clone());
-			TotalSupply::<T>::mutate(token_id, |supply| *supply -= amount);
+			if Self::is_non_fungible(token_id) {
+				let type_id = Self::get_type_id(token_id);
+	
+				Balances::<T>::mutate(type_id, to, |balance| *balance = balance.saturating_sub(amount));
+				TotalSupply::<T>::mutate(type_id, |supply| *supply = supply.saturating_sub(amount));
+			} else {
+				Balances::<T>::mutate(token_id, to, |balance| *balance = balance.saturating_sub(amount));
+				TotalSupply::<T>::mutate(token_id, |supply| *supply = supply.saturating_sub(amount));
+			}
 		}
 
-		Self::deposit_event(RawEvent::BurnBatch(token_id, to.clone(), amounts));
+		Self::deposit_event(RawEvent::BurnBatch(*token_id, accounts.clone(), amounts));
 		
 		Ok(())
 	}
 
 	pub fn do_safe_transfer_from(
-		from: T::AccountId,
-		to: T::AccountId,
-		id: T::TokenId,
+		token_id: &T::TokenId,
+		from: &T::AccountId,
+		to: &T::AccountId,
 		amount: T::TokenBalance
-	) -> dispatch::DispatchResult
-	{
-		let from_balance = Self::balance_of((id, from.clone()));
-		ensure!(from_balance >= amount.clone(), Error::<T>::InsufficientFunds);
+	) -> DispatchResult {
+		let _new_balance = Self::balances(token_id, from)
+			.checked_sub(&amount)
+			.ok_or(Error::<T>::InsufficientBalance)?;
 
-		Balances::<T>::mutate((id, from), |balance| *balance -= amount.clone());
-		Balances::<T>::mutate((id, to), |balance| *balance += amount.clone());
+		if from != to {
+			if Self::is_non_fungible(token_id) {
+				let type_id = Self::get_type_id(token_id);
+	
+				Balances::<T>::mutate(type_id, from, |balance| *balance -= amount);
+				Balances::<T>::mutate(type_id, to, |balance| *balance += amount);
+			} else {
+				Balances::<T>::mutate(token_id, from, |balance| *balance -= amount);
+				Balances::<T>::mutate(token_id, to, |balance| *balance += amount);
+			}
+
+			Self::deposit_event(RawEvent::Transferred(*token_id, from.clone(), to.clone(), amount));
+		}
 
 		Ok(())
 	}

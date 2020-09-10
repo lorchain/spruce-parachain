@@ -268,7 +268,6 @@ impl pallet_token::Trait for Runtime {
 	type Randomness = RandomnessCollectiveFlip;
 	type TokenBalance = u128;
 	type TokenId = [u8; 32];
-	type TokenType = [u8; 16];
 }
 
 parameter_types! {
@@ -298,14 +297,15 @@ impl pallet_valley::Trait for Runtime {
 	type ModuleId = ValleyModuleId;
 }
 
-impl pallet_tao::Trait for Runtime {
-	type Event = Event;
-	type TaoId = u32;
-}
-
 impl pallet_commodity::Trait for Runtime {
 	type Event = Event;
 	type CommodityId = u32;
+}
+
+impl pallet_tao::Trait for Runtime {
+	type Event = Event;
+	type TaoId = u32;
+	type CommodityAsset = CommodityModule;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -330,8 +330,8 @@ construct_runtime!(
 		WrapModule: pallet_wrap::{Module, Call, Storage, Event<T>},
 		CdpModule: pallet_cdp::{Module, Call, Storage, Event<T>},
 		ValleyModule: pallet_valley::{Module, Call, Storage, Event<T>},
-		TaoModule: pallet_tao::{Module, Call, Storage, Event<T>},
 		CommodityModule: pallet_commodity::{Module, Call, Storage, Event<T>},
+		TaoModule: pallet_tao::{Module, Call, Storage, Event<T>},
 	}
 );
 
