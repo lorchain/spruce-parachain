@@ -3926,7 +3926,6 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "frame-system",
- "pallet-primitives",
  "pallet-token",
  "parity-scale-codec",
  "sp-core",

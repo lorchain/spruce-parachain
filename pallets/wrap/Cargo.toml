@@ -11,7 +11,7 @@ frame-system = { version = "2.0.0-rc6", default-features = false }
 sp-runtime = { version = "2.0.0-rc6", default-features = false }
 sp-io = { version = "2.0.0-rc6", default-features = false }
 sp-std = { version = "2.0.0-rc6", default-features = false }
-primitives = { package = "pallet-primitives", path = "../primitives", default-features = false }
+# primitives = { package = "pallet-primitives", path = "../primitives", default-features = false }
 # multi-currency = { package = "pallet-multi-currency", path = "../multi-currency", default-features = false }
 # currencies = { package = "pallet-currencies", path = "../currencies", default-features = false }
 token = { package = "pallet-token", path = "../token", default-features = false }
@@ -29,7 +29,7 @@ std = [
     'sp-runtime/std',
     'sp-io/std',
     'sp-std/std',
-    'primitives/std',
+    # 'primitives/std',
     # 'currencies/std',
     'token/std',
 ]

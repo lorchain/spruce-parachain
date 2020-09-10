@@ -1,17 +1,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Encode, Decode};
 use frame_support::{
-	decl_module, decl_storage, decl_event, decl_error, ensure, dispatch,
+	debug, decl_module, decl_storage, decl_event, decl_error, ensure, dispatch,
 	traits::{Currency, Get, ExistenceRequirement},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
-	ModuleId,
+	ModuleId, RuntimeDebug,
 	traits::{
 		AccountIdConversion, One, Zero, Saturating, SaturatedConversion,
 	}
 };
-use primitives::CurrencyId;
+use sp_std::prelude::*;
+
+// use primitives::CurrencyId;
 // use currencies::{MultiCurrency, MultiCurrencyExtended};
 
 /// The pallet's configuration trait.
@@ -23,6 +26,8 @@ pub trait Trait: frame_system::Trait + token::Trait {
 }
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+type CurrencyId = u64;
 
 // This pallet's storage items.
 decl_storage! {
@@ -67,7 +72,6 @@ decl_module! {
 		#[weight = 10_000]
 		pub fn create(origin, currency_id: CurrencyId) -> dispatch::DispatchResult {
 			let sender = ensure_signed(origin)?;
-
 			ensure!(!WrappedTokens::<T>::contains_key(currency_id), Error::<T>::AlreadyCreated);
 
 			let token_id = token::Module::<T>::create_token(&sender, false, [].to_vec());
