@@ -307,7 +307,9 @@ impl pallet_commodity::Trait for Runtime {
 impl pallet_tao::Trait for Runtime {
 	type Event = Event;
 	type TaoId = u32;
-	type CommodityAsset = CommodityModule;
+	// type CommodityAsset = CommodityModule;
+	type VirtualCommodity = CommodityModule;
+	type RealCommodity = CommodityModule;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

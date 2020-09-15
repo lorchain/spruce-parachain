@@ -12,13 +12,13 @@ use sp_runtime::{
 	traits::{StaticLookup, AccountIdConversion, AtLeast32Bit, Bounded, Member, Hash, One},
 };
 use sp_std::{prelude::*, cmp, fmt::Debug, result};
+use commodity::{CommodityType, VirtualCommodity, RealCommodity};
 
-use commodity::{CommodityAsset};
-
-pub trait Trait: frame_system::Trait + token::Trait + commodity::Trait {
+pub trait Trait: frame_system::Trait + commodity::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 	type TaoId: Parameter + Member + AtLeast32Bit + Bounded + Default + Copy;
-	type CommodityAsset: CommodityAsset<Self::CommodityId, Self::AccountId, Self::TokenId, Self::TokenBalance>;
+	type VirtualCommodity: VirtualCommodity<Self::CommodityId, Self::AccountId, Self::TokenBalance>;
+	type RealCommodity: RealCommodity<Self::CommodityId, Self::AccountId, Self::TokenBalance>;
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -27,8 +27,17 @@ pub struct Tao<AccountId> where {
 	uri: Vec<u8>,
 }
 
+/// Commodity creation options.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Commodity<AccountId, CommodityId, TaoId> {
+pub struct CommodityOptions {
+	pub is_real: bool,
+	pub is_nf: bool,
+	pub token_uri: Vec<u8>,
+	pub commodity_uri: Vec<u8>,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct CommodityItem<AccountId, CommodityId, TaoId> {
 	pub id: CommodityId,
 	pub tao: TaoId,
 	pub owner: AccountId,
@@ -44,7 +53,7 @@ decl_storage! {
 		pub OwnedTaoIndex get(fn owned_tao_index): map hasher(blake2_128_concat) T::AccountId => T::Index;
 
 		pub TaoCommodities get(fn tao_commodities):
-			double_map hasher(twox_64_concat) T::TaoId, hasher(blake2_128_concat) T::Index => Option<Commodity<T::AccountId, T::CommodityId, T::TaoId>>;
+			double_map hasher(twox_64_concat) T::TaoId, hasher(blake2_128_concat) T::Index => Option<CommodityItem<T::AccountId, T::CommodityId, T::TaoId>>;
 		pub TaoCommodityCount get(fn tao_commodity_count): T::Index;
 	}
 }
@@ -101,17 +110,17 @@ decl_module! {
 		}
 
 		#[weight = 0]
-		pub fn create_commodity(origin, tao_id: T::TaoId, is_real: bool, is_nf: bool, commodity_uri: Vec<u8>, token_uri: Vec<u8>) -> DispatchResult {
+		pub fn create_commodity(origin, tao_id: T::TaoId, token_id: T::TokenId, commodity_type: CommodityType, uri: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(Taos::<T>::contains_key(tao_id), Error::<T>::InvalidTaoId);
 
-			let commodity_id = T::CommodityAsset::create_commodity(&sender, is_real, is_nf, token_uri);
+			let commodity_id = commodity::Module::<T>::create_commodity(&sender, token_id, commodity_type);
 
-			let new_commodity = Commodity {
+			let new_commodity = CommodityItem {
 				id: commodity_id,
 				tao: tao_id,
 				owner: sender.clone(),
-				uri: commodity_uri,
+				uri,
 			};
 
 			let commodity_index = Self::tao_commodity_count();
@@ -120,6 +129,15 @@ decl_module! {
 			TaoCommodityCount::<T>::mutate(|count| *count += One::one());
 
 			Self::deposit_event(RawEvent::CommodityCreated(tao_id, commodity_id, sender));
+
+			Ok(())
+		}
+
+		#[weight = 0]
+		pub fn mint(origin, commodity_id: T::CommodityId, amount: T::TokenBalance) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			T::RealCommodity::mint(&commodity_id, &sender, amount);
 
 			Ok(())
 		}

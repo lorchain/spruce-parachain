@@ -3664,6 +3664,7 @@ dependencies = [
  "frame-system",
  "pallet-timestamp",
  "pallet-token",
+ "pallet-valley",
  "parity-scale-codec",
  "sp-core",
  "sp-io",
