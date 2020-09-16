@@ -93,6 +93,16 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = 0]
+		fn create(origin, is_nf: bool, uri: Vec<u8>) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			let id = Self::create_token(&sender, is_nf, uri);
+			debug::info!("id is {:?}", id);
+
+			Ok(())
+		}
+
+		#[weight = 0]
         fn set_approval_for_all(origin, operator: T::AccountId, approved: bool) -> DispatchResult {
            let sender = ensure_signed(origin)?;
 
@@ -135,43 +145,7 @@ decl_module! {
 
 			Ok(())
 		}
-
-		#[weight = 0]
-		fn debug_create_token(origin, is_nf: bool) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			debug::info!("run into crate token");
-
-			let id = Self::create_token(&sender, is_nf, [].to_vec());
-			// let id = Self::get_token_id(&sender);
-			debug::info!("id is {:?}", id);
-
-			Ok(())
-		}
-
-		// #[weight = 0]
-		// fn debug_mint_nf(origin, token_id: T::TokenId, to: Vec<T::AccountId>) -> DispatchResult {
-		// 	let sender = ensure_signed(origin)?;
-
-		// 	debug::info!("run into mint nf");
-
-		// 	Self::mint_non_fungible(token_id, &to)?;
-
-		// 	Ok(())
-		// }
-
-		// #[weight = 0]
-		// fn debug_mint_f(origin, token_id: T::TokenId, to: Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> DispatchResult {
-		// 	let sender = ensure_signed(origin)?;
-
-		// 	debug::info!("run into mint nf");
-
-		// 	Self::mint_fungible(token_id, &to, amounts)?;
-
-		// 	Ok(())
-		// }
-
-    }
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -186,7 +160,6 @@ impl<T: Trait> Module<T> {
 
 		let mut array = [0; 32];
 		array[..16].copy_from_slice(&random[..]);
-		// debug::info!("array is {:?}", array);
 
 		array.into()
 	}
