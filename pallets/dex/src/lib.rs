@@ -56,8 +56,9 @@ decl_event!(
 	pub enum Event<T> where 
 		AccountId = <T as system::Trait>::AccountId,
 		PairId = <T as Trait>::PairId,
+		TokenId = <T as token::Trait>::TokenId,
 	{
-		PairCreated(AccountId, PairId),
+		PairCreated(AccountId, PairId, TokenId),
 	}
 );
 
@@ -109,7 +110,7 @@ decl_module! {
 			Pairs::<T>::insert(pair_id, new_pair);
 			NextPairId::<T>::mutate(|id| *id += One::one());
 
-			Self::deposit_event(RawEvent::PairCreated(sender, pair_id));
+			Self::deposit_event(RawEvent::PairCreated(sender, pair_id, pair_token));
 
 			Ok(())
 		}

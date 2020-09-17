@@ -75,7 +75,7 @@ decl_event!(
 		TokenId = <T as Trait>::TokenId,
 		TokenBalance = <T as Trait>::TokenBalance,
     {
-		Created(AccountId, TokenId),
+		Created(TokenId, AccountId),
 		MintNonFungible(TokenId, AccountId, TokenId),
 		MintFungible(TokenId, AccountId, TokenBalance),
 		Burn(TokenId, AccountId, TokenBalance),
@@ -96,9 +96,10 @@ decl_module! {
 		fn create(origin, is_nf: bool, uri: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			let id = Self::create_token(&sender, is_nf, uri);
-			debug::info!("id is {:?}", id);
+			let token_id = Self::create_token(&sender, is_nf, uri);
+			// debug::info!("token id is {:?}", token_id);
 
+			Self::deposit_event(RawEvent::Created(token_id, sender));
 			Ok(())
 		}
 
@@ -208,8 +209,6 @@ impl<T: Trait> Module<T> {
 
 		Tokens::<T>::insert(type_id, token);
 		TokenCount::mutate(|id| *id += <u64 as One>::one());
-
-		Self::deposit_event(RawEvent::Created(who.clone(), type_id));
 
 		type_id
 	}
