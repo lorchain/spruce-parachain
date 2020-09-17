@@ -35,9 +35,12 @@ decl_storage! {
 // The pallet's events
 decl_event!(
 	pub enum Event<T> where
-		AccountId = <T as frame_system::Trait>::AccountId
+		AccountId = <T as frame_system::Trait>::AccountId,
+		TokenId = <T as token::Trait>::TokenId,
+		TokenBalance = <T as token::Trait>::TokenBalance,
 	{
-		SomethingStored(u32, AccountId),
+		BeiCreated(TokenId, AccountId),
+		CollateralToBei(AccountId, AccountId, TokenId, TokenBalance, TokenBalance),
 	}
 );
 
@@ -59,15 +62,14 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = 10_000]
-		pub fn init_token_once(origin) -> dispatch::DispatchResult {
+		pub fn create_bei(origin) -> dispatch::DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			let bei_token_id = token::Module::<T>::create_token(&sender, false, [].to_vec());
-			let val_token_id = token::Module::<T>::create_token(&sender, false, [].to_vec());
 
 			BeiTokenId::<T>::put(bei_token_id);
-			ValTokenId::<T>::put(val_token_id);
 
+			Self::deposit_event(RawEvent::BeiCreated(bei_token_id, sender));
 			Ok(())
 		}
 
@@ -83,8 +85,9 @@ decl_module! {
 
 			join::collateral_join::<T>(collateral_token, sender.clone(), account.clone(), amount)?;
 			cdp::Module::<T>::frob(collateral_token, account.clone(), amount, target);
-			join::bei_exit::<T>(sender, account.clone(), target);
+			join::bei_exit::<T>(sender.clone(), account.clone(), target);
 
+			Self::deposit_event(RawEvent::CollateralToBei(sender, account, collateral_token, amount, target));
 			Ok(())
 		}
 	}
