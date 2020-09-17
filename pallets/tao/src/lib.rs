@@ -40,8 +40,9 @@ decl_storage! {
 
 		pub TaoCommodities get(fn tao_commodities):
 			double_map hasher(twox_64_concat) T::TaoId, hasher(blake2_128_concat) T::Index => Option<TaoCommodity<T::AccountId, T::CommodityId, T::TaoId>>;
-		pub TaoCommodityCount get(fn tao_commodity_count): T::Index;
-
+		pub TaoCommodityIndex get(fn tao_commodity_index):
+			double_map hasher(twox_64_concat) T::TaoId, hasher(blake2_128_concat) T::CommodityId => T::Index;
+		pub TaoCommodityCount get(fn tao_commodity_count): map hasher(blake2_128_concat) T::TaoId => T::Index;
 	}
 }
 
@@ -63,8 +64,8 @@ decl_event!(
 		CommodityId = <T as commodity::Trait>::CommodityId,
 	{
 		TaoCreated(TaoId, AccountId, Vec<u8>),
-		CommodityRegistered(TaoId, CommodityId, AccountId),
-
+		CommodityAdded(TaoId, CommodityId, AccountId),
+		CommodityRemoved(TaoId, CommodityId, AccountId),
 	}
 );
 
@@ -94,7 +95,7 @@ decl_module! {
 		}
 
 		#[weight = 0]
-		pub fn register_commodity(origin, tao_id: T::TaoId, commodity_id: T::CommodityId) -> DispatchResult {
+		pub fn add_commodity(origin, tao_id: T::TaoId, commodity_id: T::CommodityId) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(Taos::<T>::contains_key(tao_id), Error::<T>::InvalidTaoId);
 
@@ -106,12 +107,29 @@ decl_module! {
 				owner: sender.clone(),
 			};
 
-			let commodity_index = Self::tao_commodity_count();
+			let new_commodity_index = Self::tao_commodity_count(tao_id);
 
-			TaoCommodities::<T>::insert(tao_id, commodity_index, new_commodity);
-			TaoCommodityCount::<T>::mutate(|count| *count += One::one());
+			TaoCommodities::<T>::insert(tao_id, new_commodity_index, new_commodity);
+			TaoCommodityCount::<T>::mutate(tao_id, |count| *count += One::one());
+			TaoCommodityIndex::<T>::insert(tao_id, commodity_id, new_commodity_index);
 
-			Self::deposit_event(RawEvent::CommodityRegistered(tao_id, commodity_id, sender));
+			Self::deposit_event(RawEvent::CommodityAdded(tao_id, commodity_id, sender));
+
+			Ok(())
+		}
+
+		#[weight = 0]
+		pub fn remove_commodity(origin, tao_id: T::TaoId, commodity_id: T::CommodityId) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			ensure!(Taos::<T>::contains_key(tao_id), Error::<T>::InvalidTaoId);
+
+			let commodity_index = Self::tao_commodity_index(tao_id, commodity_id);
+
+			TaoCommodities::<T>::remove(tao_id, commodity_index);
+			TaoCommodityCount::<T>::mutate(tao_id, |count| *count -= One::one());
+			TaoCommodityIndex::<T>::remove(tao_id, commodity_id);
+
+			Self::deposit_event(RawEvent::CommodityRemoved(tao_id, commodity_id, sender));
 
 			Ok(())
 		}
