@@ -91,7 +91,7 @@ decl_module! {
 			let new_balance = Self::balances((currency_id, sender.clone())).saturating_add(value);
 
 			T::Currency::transfer(&sender, &Self::account_id(), value, ExistenceRequirement::AllowDeath)?;
-			token::Module::<T>::mint(&token_id, &sender, Self::convert(value));
+			token::Module::<T>::do_mint(&token_id, &sender, Self::convert(value));
 
 			Balances::<T>::insert((currency_id, sender.clone()), new_balance);
 			TotalSupply::<T>::mutate(currency_id, |bal| *bal += value);
@@ -109,7 +109,7 @@ decl_module! {
 			let new_balance = Self::balances((currency_id, sender.clone())).saturating_sub(value);
 
 			T::Currency::transfer(&Self::account_id(), &sender, value, ExistenceRequirement::AllowDeath)?;
-			token::Module::<T>::burn(&token_id, &sender, Self::convert(value));
+			token::Module::<T>::do_burn(&token_id, &sender, Self::convert(value));
 
 			Balances::<T>::insert((currency_id, sender.clone()), new_balance);
 			TotalSupply::<T>::mutate(currency_id, |bal| *bal -= value);

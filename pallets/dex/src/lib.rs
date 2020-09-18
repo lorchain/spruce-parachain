@@ -329,12 +329,12 @@ impl<T: Trait> Module<T> {
 		let total_supply = token::Module::<T>::total_supply(pair.pair_token);
 		if total_supply == Zero::zero() {
 			liquidity = ((amount_a * amount_b) * (amount_a * amount_b)) - MINIMUM_LIQUIDITY.into();
-			token::Module::<T>::mint(&pair.pair_token, &T::AccountId::default(), MINIMUM_LIQUIDITY.into()); // permanently lock the first MINIMUM_LIQUIDITY tokens
+			token::Module::<T>::do_mint(&pair.pair_token, &T::AccountId::default(), MINIMUM_LIQUIDITY.into()); // permanently lock the first MINIMUM_LIQUIDITY tokens
 		} else {
 			liquidity = cmp::min(amount_a * total_supply / reserve_a, amount_b * total_supply / reserve_b);
 		}
 		ensure!(liquidity >= Zero::zero(), Error::<T>::InsufficientLiquidityMinted);
-		token::Module::<T>::mint(&pair.pair_token, &to, liquidity);
+		token::Module::<T>::do_mint(&pair.pair_token, &to, liquidity);
 
 		Self::do_update(pair_id, balance_a, balance_b, reserve_a, reserve_b);
 
@@ -361,7 +361,7 @@ impl<T: Trait> Module<T> {
 		let amount_b = liquidity * balance_b / total_supply;
 		ensure!(amount_a > Zero::zero() && amount_b > Zero::zero(), Error::<T>::InsufficientLiquidityBurned);
 
-		token::Module::<T>::burn(&pair.pair_token, &pair.account, liquidity);
+		token::Module::<T>::do_burn(&pair.pair_token, &pair.account, liquidity);
 		token::Module::<T>::do_safe_transfer_from(&pair.token_a, &pair.account, &to, amount_a);
 		token::Module::<T>::do_safe_transfer_from(&pair.token_b, &pair.account, &to, amount_b);
 

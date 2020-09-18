@@ -46,6 +46,8 @@ decl_storage! {
 		pub TokenCount get(fn token_count): u64;
 		pub NFIndex get(fn nf_index): map hasher(blake2_128_concat) T::TokenId => u128;
 
+		pub Owners get(fn owner): map hasher(blake2_128_concat) T::TokenId => Option<T::AccountId>;
+
 		// ERC1155
 		pub Balances get(fn balances):
 			double_map hasher(twox_64_concat) T::TokenId, hasher(blake2_128_concat) T::AccountId => T::TokenBalance;
@@ -66,6 +68,8 @@ decl_error! {
 		InsufficientBalance,
 		TransferSameAccount,
 		TokenNotExists,
+		TokenOwnerNotFound,
+		SenderNotEqualToOwner,
 	}
 }
 
@@ -146,6 +150,30 @@ decl_module! {
 
 			Ok(())
 		}
+
+		#[weight = 0]
+		fn mint(origin, id: T::TokenId, to: T::AccountId, amount: T::TokenBalance) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			let owner = Self::owner(id).ok_or(Error::<T>::TokenOwnerNotFound)?;
+			ensure!(sender == owner, Error::<T>::SenderNotEqualToOwner);
+
+			Self::do_mint(&id, &to, amount);
+
+			Ok(())
+		}
+
+		#[weight = 0]
+		fn burn(origin, id: T::TokenId, to: T::AccountId, amount: T::TokenBalance) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			let owner = Self::owner(id).ok_or(Error::<T>::TokenOwnerNotFound)?;
+			ensure!(sender == owner, Error::<T>::SenderNotEqualToOwner);
+
+			Self::do_burn(&id, &to, amount);
+
+			Ok(())
+		}
 	}
 }
 
@@ -209,6 +237,7 @@ impl<T: Trait> Module<T> {
 
 		Tokens::<T>::insert(type_id, token);
 		TokenCount::mutate(|id| *id += <u64 as One>::one());
+		Owners::<T>::insert(type_id, who);
 
 		type_id
 	}
@@ -258,7 +287,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	pub fn mint(token_id: &T::TokenId, account: &T::AccountId, amount: T::TokenBalance) -> Result<(), DispatchError>  {
+	pub fn do_mint(token_id: &T::TokenId, account: &T::AccountId, amount: T::TokenBalance) -> Result<(), DispatchError>  {
 		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
 		let is_nf = Self::is_non_fungible(token_id);
 
@@ -271,7 +300,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	pub fn mint_batch(token_id: &T::TokenId, accounts: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), DispatchError>  {
+	pub fn do_mint_batch(token_id: &T::TokenId, accounts: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), DispatchError>  {
 		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
 		let is_nf = Self::is_non_fungible(token_id);
 
@@ -284,7 +313,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	pub fn burn(token_id: &T::TokenId, account: &T::AccountId, amount: T::TokenBalance) -> Result<(), DispatchError>  {
+	pub fn do_burn(token_id: &T::TokenId, account: &T::AccountId, amount: T::TokenBalance) -> Result<(), DispatchError>  {
 		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
 
 		if Self::is_non_fungible(token_id) {
@@ -302,7 +331,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	pub fn burn_batch(token_id: &T::TokenId, accounts: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), DispatchError>  {
+	pub fn do_burn_batch(token_id: &T::TokenId, accounts: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), DispatchError>  {
 		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
 
 		for i in 0..accounts.len() {

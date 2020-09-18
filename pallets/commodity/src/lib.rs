@@ -444,12 +444,12 @@ impl<T: Trait> Module<T> {
 					p.stake_balance -= expected_available;
 					p.stake_minted += amount;
 	
-					token::Module::<T>::mint(&commodity.token, &who, amount)?;
+					token::Module::<T>::do_mint(&commodity.token, &who, amount)?;
 	
 					Commodities::<T>::insert(commodity_id, commodity);
 				},
 				_ => {
-					token::Module::<T>::mint(&commodity.token, &who, amount)?;
+					token::Module::<T>::do_mint(&commodity.token, &who, amount)?;
 				},
 			}
 
@@ -470,12 +470,12 @@ impl<T: Trait> Module<T> {
 				p.stake_balance += expected_available;
 				p.stake_minted -= amount;
 
-				token::Module::<T>::burn(&commodity.token, &who, amount)?;
+				token::Module::<T>::do_burn(&commodity.token, &who, amount)?;
 
 				Commodities::<T>::insert(commodity_id, commodity);
 			},
 			_ => {
-				token::Module::<T>::burn(&commodity.token, &who, amount)?;
+				token::Module::<T>::do_burn(&commodity.token, &who, amount)?;
 			},
 		}
 
@@ -494,7 +494,7 @@ impl<T: Trait> Module<T> {
 				p.stake_balance = p.stake_balance + expected_available - token_to_collateral;
 				p.stake_minted -= amount;
 
-				token::Module::<T>::burn(&commodity.token, &who, amount)?;
+				token::Module::<T>::do_burn(&commodity.token, &who, amount)?;
 				token::Module::<T>::do_safe_transfer_from(&p.collateral_token, &p.account, &who, token_to_collateral)?;
 
 				Commodities::<T>::insert(commodity_id, commodity);
