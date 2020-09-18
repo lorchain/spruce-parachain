@@ -61,8 +61,9 @@ pub enum CommodityType {
 
 /// Commodity creation options.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct CommodityOptions<AccountId, TokenId> {
-	pub token_id: TokenId,
+pub struct CommodityOptions<AccountId> {
+	pub is_nf: bool,
+	pub token_uri: Vec<u8>,
 	pub commodity_type: CommodityType,
 	pub permissions: PermissionsV1<AccountId>,
 }
@@ -139,7 +140,7 @@ decl_event!(
 		AccountId = <T as frame_system::Trait>::AccountId,
 		CommodityId = <T as Trait>::CommodityId,
 		Balance = <T as token::Trait>::TokenBalance,
-		CommodityOptions = CommodityOptions<<T as frame_system::Trait>::AccountId, <T as token::Trait>::TokenId>,
+		CommodityOptions = CommodityOptions<<T as frame_system::Trait>::AccountId>,
 	{
 		Created(CommodityId, AccountId, CommodityOptions),
 		PermissionUpdated(CommodityId, PermissionsV1<AccountId>),
@@ -178,7 +179,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = 0]
-		pub fn create(origin, options: CommodityOptions<T::AccountId, T::TokenId>) -> DispatchResult {
+		pub fn create(origin, options: CommodityOptions<T::AccountId>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			let commodity_id = Self::create_commodity(&sender, &options);
@@ -322,7 +323,9 @@ impl<T: Trait> Module<T> {
 		Self::commodities(commodity_id).is_some()
 	}
 
-	pub fn create_commodity(who: &T::AccountId, options: &CommodityOptions<T::AccountId, T::TokenId>) -> T::CommodityId {
+	pub fn create_commodity(who: &T::AccountId, options: &CommodityOptions<T::AccountId>) -> T::CommodityId {
+		let token_id = token::Module::<T>::create_token(who, options.is_nf, &options.token_uri);
+		
 		let commodity_id = Self::next_commodity_id();
 		
 		let bei_token_id = valley::Module::<T>::bei_token_id();
@@ -352,7 +355,7 @@ impl<T: Trait> Module<T> {
 
 		let new_commodity = Commodity {
 			id: commodity_id,
-			token: options.token_id,
+			token: token_id,
 			creator: who.clone(),
 			prop,
 			created: pallet_timestamp::Module::<T>::now(),

@@ -100,7 +100,7 @@ decl_module! {
 		fn create(origin, is_nf: bool, uri: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			let token_id = Self::create_token(&sender, is_nf, uri);
+			let token_id = Self::create_token(&sender, is_nf, &uri);
 			// debug::info!("token id is {:?}", token_id);
 
 			Self::deposit_event(RawEvent::Created(token_id, sender));
@@ -225,7 +225,7 @@ impl<T: Trait> Module<T> {
 		Self::tokens(token_id).is_some()
 	}
 
-	pub fn create_token(who: &T::AccountId, is_nf: bool, uri: Vec<u8>) -> T::TokenId {
+	pub fn create_token(who: &T::AccountId, is_nf: bool, uri: &Vec<u8>) -> T::TokenId {
 		let type_id = Self::random_type_id(&who);
 
 		let token = Token::<T> {

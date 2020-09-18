@@ -74,7 +74,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(!WrappedTokens::<T>::contains_key(currency_id), Error::<T>::AlreadyCreated);
 
-			let token_id = token::Module::<T>::create_token(&sender, false, [].to_vec());
+			let token_id = token::Module::<T>::create_token(&sender, false, &[].to_vec());
 
 			WrappedTokens::<T>::insert(currency_id, token_id);
 

@@ -96,7 +96,7 @@ decl_module! {
 
 			let (token_0, token_1) = Self::sort_tokens(token_a, token_b);
 
-			let pair_token = token::Module::<T>::create_token(&sender, false, [].to_vec());
+			let pair_token = token::Module::<T>::create_token(&sender, false, &[].to_vec());
 
 			let account: T::AccountId = T::ModuleId::get().into_sub_account(&pair_token);
 

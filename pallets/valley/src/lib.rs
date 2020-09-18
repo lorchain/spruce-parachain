@@ -65,7 +65,7 @@ decl_module! {
 		pub fn create_bei(origin) -> dispatch::DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			let bei_token_id = token::Module::<T>::create_token(&sender, false, [].to_vec());
+			let bei_token_id = token::Module::<T>::create_token(&sender, false, &[].to_vec());
 
 			BeiTokenId::<T>::put(bei_token_id);
 
