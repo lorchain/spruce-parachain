@@ -14,6 +14,7 @@ use sp_runtime::{
 	},
 };
 use sp_std::{prelude::*, cmp, fmt::Debug, result};
+use commodity::CommodityOptions;
 
 pub trait Trait: frame_system::Trait + commodity::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -95,11 +96,11 @@ decl_module! {
 		}
 
 		#[weight = 0]
-		pub fn add_commodity(origin, tao_id: T::TaoId, commodity_id: T::CommodityId) -> DispatchResult {
+		pub fn create_tao_commodity(origin, tao_id: T::TaoId, commodity_options: CommodityOptions<T::AccountId>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(Taos::<T>::contains_key(tao_id), Error::<T>::InvalidTaoId);
 
-			ensure!(commodity::Module::<T>::exists(&commodity_id), Error::<T>::InvalidCommodityId);
+			let commodity_id = commodity::Module::<T>::create_commodity(&sender, &commodity_options);
 
 			let new_commodity = TaoCommodity {
 				id: commodity_id,
