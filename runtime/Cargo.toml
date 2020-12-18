@@ -52,7 +52,7 @@ pallet-tao = { path = "../pallets/tao", default-features = false }
 pallet-commodity = { path = "../pallets/commodity", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner" }
+wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner" }
 
 [features]
 default = ["std"]
