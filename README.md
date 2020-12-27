@@ -1,6 +1,4 @@
-# Spruce
-
-Implementation of spruce node in Rust.
+# Spruce Parachain
 
 ## Build
 
@@ -13,7 +11,8 @@ curl https://sh.rustup.rs -sSf | sh
 Build Wasm and native code:
 
 ```bash
-cargo build --release
+make init
+make build
 ```
 
 ## Run
