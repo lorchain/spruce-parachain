@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
-use node_spruce_runtime::{self, opaque::Block, RuntimeApi};
+use spruce_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
@@ -14,8 +14,8 @@ use sc_finality_grandpa::{FinalityProofProvider as GrandpaFinalityProofProvider,
 // Our native executor instance.
 native_executor_instance!(
 	pub Executor,
-	node_spruce_runtime::api::dispatch,
-	node_spruce_runtime::native_version,
+	spruce_runtime::api::dispatch,
+	spruce_runtime::native_version,
 	frame_benchmarking::benchmarking::HostFunctions,
 );
 

@@ -1,5 +1,5 @@
 [package]
-name = "node-spruce"
+name = "parachain-spruce"
 version = "2.0.0"
 authors = ["Anonymous"]
 edition = "2018"
@@ -7,7 +7,7 @@ license = "Unlicense"
 build = "build.rs"
 
 [[bin]]
-name = "node-spruce"
+name = "parachain-spruce"
 
 [dependencies]
 structopt = "0.3.8"
@@ -43,7 +43,7 @@ pallet-transaction-payment-rpc = { version = "2.0.0" }
 frame-benchmarking = { version = "2.0.0" }
 frame-benchmarking-cli = { version = "2.0.0" }
 
-node-spruce-runtime = { version = "2.0.0", path = "../runtime" }
+spruce-runtime = { version = "2.0.0", path = "../runtime" }
 
 [build-dependencies]
 substrate-build-script-utils = { version = "2.0.0" }
@@ -51,5 +51,5 @@ substrate-build-script-utils = { version = "2.0.0" }
 [features]
 default = []
 runtime-benchmarks = [
-	"node-spruce-runtime/runtime-benchmarks",
+	"spruce-runtime/runtime-benchmarks",
 ]
