@@ -2,74 +2,55 @@
 
 use codec::{Encode, Decode};
 use frame_support::{
-	debug, decl_module, decl_storage, decl_error, decl_event, ensure, StorageValue, StorageMap, Parameter,
-	traits::Randomness,
+	decl_module, decl_storage, decl_error, decl_event, ensure, StorageValue, StorageMap, Parameter,
 	dispatch::{DispatchResult, DispatchError},
 };
-use sp_io::hashing::blake2_128;
-use frame_system::{self as system, ensure_signed};
-use sp_runtime::{traits::{
-	AtLeast32Bit, MaybeSerializeDeserialize, MaybeDisplay, Bounded, Member,
-	SimpleBitOps, MaybeSerialize, Hash, One, Saturating,
-	Zero, AtLeast32BitUnsigned, CheckedAdd, CheckedSub,
-}};
-use sp_std::fmt::Debug;
-use sp_std::prelude::*;
+use sp_runtime::{
+	traits::{
+		AtLeast32Bit, MaybeSerializeDeserialize, Bounded, Member,
+		One, AtLeast32BitUnsigned, CheckedAdd, CheckedSub,
+	},
+	RuntimeDebug,
+};
+// use sp_std::fmt::Debug;
+// use sp_std::prelude::*;
 use sp_std::vec::Vec;
+use sp_std::vec;
 
 /// The module's configuration trait.
 pub trait Trait: frame_system::Trait {
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-	// type Currency: Currency<Self::AccountId>;
-	type Randomness: Randomness<Self::Hash>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	
-	type TokenBalance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug +
+	type TokenBalance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy +
 		MaybeSerializeDeserialize + From<u128> + Into<u128>;
     
-    type TokenId: Parameter + Member + Debug + Default + Copy + Ord
-		+ MaybeSerializeDeserialize + From<[u8;32]> + Into<[u8;32]>;
+    type TokenId: Parameter + Member + AtLeast32Bit + Bounded + Default + Copy;
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Debug)]
-pub struct Token<T> where
-	T: Trait
-{
-	id: T::TokenId,
-	creator: T::AccountId,
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+pub struct Token<AccountId> {
+	creator: AccountId,
 	is_nf: bool,
 	uri: Vec<u8>,
 }
 
 decl_storage! {
     trait Store for Module<T: Trait> as TokenModule {
-		pub Tokens get(fn tokens): map hasher(blake2_128_concat) T::TokenId => Option<Token<T>>;
+		pub Tokens get(fn tokens): map hasher(blake2_128_concat) T::TokenId => Option<Token<T::AccountId>>;
 		pub TokenCount get(fn token_count): u64;
-		pub NFIndex get(fn nf_index): map hasher(blake2_128_concat) T::TokenId => u128;
+		pub NextTokenId get(fn next_token_id): T::TokenId;
 
-		pub Owners get(fn owner): map hasher(blake2_128_concat) T::TokenId => Option<T::AccountId>;
-
-		// ERC1155
 		pub Balances get(fn balances):
-			double_map hasher(twox_64_concat) T::TokenId, hasher(blake2_128_concat) T::AccountId => T::TokenBalance;
-		pub Allowances get(fn allowances):
-			double_map  hasher(twox_64_concat) T::TokenId, hasher(blake2_128_concat) (T::AccountId, T::AccountId) => T::TokenBalance;
-		pub OperatorApproval get(fn operator_approval): map hasher(blake2_128_concat) (T::AccountId, T::AccountId) => bool;
-		pub TotalSupply get(fn total_supply): map hasher(blake2_128_concat) T::TokenId => T::TokenBalance;
+			double_map hasher(twox_64_concat) T::TokenId, hasher(twox_64_concat) T::AccountId => T::TokenBalance;
 	}
 }
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
 		InvalidTokenId,
-		InvalidNonFungibleId,
-		RequireNonFungible,
-		RequireFungible,
-		LengthMismatch,
 		InsufficientBalance,
-		TransferSameAccount,
-		TokenNotExists,
-		TokenOwnerNotFound,
-		SenderNotEqualToOwner,
+		NumOverflow,
+		InvalidArrayLength,
 	}
 }
 
@@ -80,13 +61,13 @@ decl_event!(
 		TokenBalance = <T as Trait>::TokenBalance,
     {
 		Created(TokenId, AccountId),
-		MintNonFungible(TokenId, AccountId, TokenId),
-		MintFungible(TokenId, AccountId, TokenBalance),
-		Burn(TokenId, AccountId, TokenBalance),
-		BurnBatch(TokenId, Vec<AccountId>, Vec<TokenBalance>),
-		Transferred(TokenId, AccountId, AccountId, TokenBalance),
-        Approval(AccountId, AccountId, TokenBalance),
-    }
+		Mint(AccountId, TokenId, TokenBalance),
+		BatchMint(AccountId, Vec<TokenId>, Vec<TokenBalance>),
+		Burn(AccountId, TokenId, TokenBalance),
+		BatchBurn(AccountId, Vec<TokenId>, Vec<TokenBalance>),
+		Transferred(AccountId, AccountId, TokenId, TokenBalance),
+		BatchTransferred(AccountId, AccountId, Vec<TokenId>, Vec<TokenBalance>),
+	}
 );
 
 decl_module! {
@@ -95,290 +76,200 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
-
-		#[weight = 0]
-		fn create(origin, is_nf: bool, uri: Vec<u8>) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			let token_id = Self::create_token(&sender, is_nf, &uri);
-			// debug::info!("token id is {:?}", token_id);
-
-			Self::deposit_event(RawEvent::Created(token_id, sender));
-			Ok(())
-		}
-
-		#[weight = 0]
-        fn set_approval_for_all(origin, operator: T::AccountId, approved: bool) -> DispatchResult {
-           let sender = ensure_signed(origin)?;
-
-		   OperatorApproval::<T>::mutate((sender, operator), |approval| *approval = approved);
-
-           Ok(())
-        }
-
-		#[weight = 0]
-        fn safe_transfer_from(
-			origin,
-			to: T::AccountId,
-			id: T::TokenId,
-			amount: T::TokenBalance
-		) -> DispatchResult 
-		{
-			let sender = ensure_signed(origin)?;
-
-			Self::do_safe_transfer_from(&id, &sender, &to, amount)?;
-
-			Ok(())
-		}
-
-		#[weight = 0]
-        fn safe_batch_transfer_from(
-			origin,
-			to: T::AccountId,
-			ids: Vec<T::TokenId>,
-			amounts: Vec<T::TokenBalance>
-		) -> DispatchResult 
-		{
-			let sender = ensure_signed(origin)?;
-
-			for i in 0..ids.len() {
-				let id = ids[i];
-				let amount = amounts[i];
-
-				Self::do_safe_transfer_from(&id, &sender, &to, amount)?;
-			}
-
-			Ok(())
-		}
-
-		#[weight = 0]
-		fn mint(origin, id: T::TokenId, to: T::AccountId, amount: T::TokenBalance) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			let owner = Self::owner(id).ok_or(Error::<T>::TokenOwnerNotFound)?;
-			ensure!(sender == owner, Error::<T>::SenderNotEqualToOwner);
-
-			Self::do_mint(&id, &to, amount);
-
-			Ok(())
-		}
-
-		#[weight = 0]
-		fn burn(origin, id: T::TokenId, to: T::AccountId, amount: T::TokenBalance) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			let owner = Self::owner(id).ok_or(Error::<T>::TokenOwnerNotFound)?;
-			ensure!(sender == owner, Error::<T>::SenderNotEqualToOwner);
-
-			Self::do_burn(&id, &to, amount);
-
-			Ok(())
-		}
 	}
 }
 
 impl<T: Trait> Module<T> {
-	fn random_type_id(sender: &T::AccountId) -> T::TokenId {
-		let payload = (
-			T::Randomness::random_seed(),
-			&sender,
-			<frame_system::Module<T>>::extrinsic_index(),
-		);
+	pub fn create_token(who: &T::AccountId, is_nf: bool, uri: &Vec<u8>) -> Result<T::TokenId, DispatchError> {
+		let token_id = Self::next_token_id();
 
-		let random = payload.using_encoded(blake2_128);
-
-		let mut array = [0; 32];
-		array[..16].copy_from_slice(&random[..]);
-
-		array.into()
-	}
-
-	fn get_token_id(type_id: &T::TokenId, index: u128) -> T::TokenId {
-		// let id_bytes = type_id.into();
-		let id_bytes = type_id.clone().into();
-		let index_bytes = index.to_be_bytes();
-
-		let mut array = [0 as u8; 32];
-		array[..16].copy_from_slice(&id_bytes[..16]);
-		array[16..].copy_from_slice(&index_bytes[..16]);
-
-		array.into()
-	}
-
-	fn get_type_id(token_id: &T::TokenId) -> T::TokenId {
-		// let id_bytes = token_id.into();
-		let id_bytes = token_id.clone().into();
-
-		let mut array = [0 as u8; 32];
-		array[..16].copy_from_slice(&id_bytes[..16]);
-
-		array.into()
-	}
-
-	pub fn is_non_fungible(token_id: &T::TokenId) -> bool {
-		let type_id = Self::get_type_id(token_id);
-		let token = Self::tokens(type_id).unwrap();
-		token.is_nf
-	}
-
-	pub fn exists(token_id: &T::TokenId) -> bool {
-		Self::tokens(token_id).is_some()
-	}
-
-	pub fn create_token(who: &T::AccountId, is_nf: bool, uri: &Vec<u8>) -> T::TokenId {
-		let type_id = Self::random_type_id(&who);
-
-		let token = Token::<T> {
-			id: type_id,
+		let new_token = Token {
 			creator: who.clone(),
 			is_nf,
 			uri: uri.clone(),
 		};
 
-		Tokens::<T>::insert(type_id, token);
-		TokenCount::mutate(|id| *id += <u64 as One>::one());
-		Owners::<T>::insert(type_id, who);
+		Tokens::<T>::insert(token_id, new_token);
+		TokenCount::mutate(|count| *count += <u64 as One>::one());
+		NextTokenId::<T>::mutate(|id| *id += One::one());
 
-		type_id
-	}
-	
-	fn mint_non_fungible(
-		token_id: &T::TokenId,
-		accounts: &Vec<T::AccountId>,
-		amounts: Vec<T::TokenBalance>,
-	) -> Result<(), DispatchError> {
-		let type_id = Self::get_type_id(token_id);
+		Self::deposit_event(RawEvent::Created(token_id.clone(), who.clone()));
 
-		let index = Self::nf_index(type_id).checked_add(<u128 as One>::one()).expect("NF index error");
-		NFIndex::<T>::mutate(type_id, |index| *index += accounts.len() as u128);
-
-		for i in 0..accounts.len() {
-			let to = &accounts[i];
-			// let amount = T::TokenBalance::from(1);
-			let amount = amounts[i];
-			let id = Self::get_token_id(&type_id, index + i as u128);
-
-			Balances::<T>::mutate(type_id, to, |balance| *balance = balance.saturating_add(amount));
-			TotalSupply::<T>::mutate(type_id, |supply| *supply = supply.saturating_add(amount));
-
-			Self::deposit_event(RawEvent::MintNonFungible(type_id, to.clone(), id));
-		}
-
-		Ok(())
+		Ok(token_id)
 	}
 
-	fn mint_fungible(
-		token_id: &T::TokenId,
-		accounts: &Vec<T::AccountId>,
-		amounts: Vec<T::TokenBalance>,
-	) -> Result<(), DispatchError> {
-		ensure!(accounts.len() == amounts.len(), Error::<T>::LengthMismatch);
-
-		for i in 0..accounts.len() {
-			let to = &accounts[i];
-			let amount = amounts[i];
-
-			Balances::<T>::mutate(token_id, to, |balance| *balance = balance.saturating_add(amount));
-			TotalSupply::<T>::mutate(token_id, |supply| *supply = supply.saturating_add(amount));
-
-			Self::deposit_event(RawEvent::MintFungible(*token_id, to.clone(), amount));
-		}
-
-		Ok(())
-	}
-
-	pub fn do_mint(token_id: &T::TokenId, account: &T::AccountId, amount: T::TokenBalance) -> Result<(), DispatchError>  {
-		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
-		let is_nf = Self::is_non_fungible(token_id);
-
-		if is_nf {
-			Self::mint_non_fungible(token_id, &[ account.clone() ].to_vec(), [ amount ].to_vec());
-		} else {
-			Self::mint_fungible(token_id, &[ account.clone() ].to_vec(), [ amount ].to_vec());
-		}
-
-		Ok(())
-	}
-
-	pub fn do_mint_batch(token_id: &T::TokenId, accounts: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), DispatchError>  {
-		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
-		let is_nf = Self::is_non_fungible(token_id);
-
-		if is_nf {
-			Self::mint_non_fungible(token_id, &accounts, amounts);
-		} else {
-			Self::mint_fungible(token_id, &accounts, amounts);
-		}
-
-		Ok(())
-	}
-
-	pub fn do_burn(token_id: &T::TokenId, account: &T::AccountId, amount: T::TokenBalance) -> Result<(), DispatchError>  {
-		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
-
-		if Self::is_non_fungible(token_id) {
-			let type_id = Self::get_type_id(token_id);
-
-			Balances::<T>::mutate(type_id, account, |balance| *balance = balance.saturating_sub(amount));
-			TotalSupply::<T>::mutate(type_id, |supply| *supply = supply.saturating_sub(amount));
-		} else {
-			Balances::<T>::mutate(token_id, account, |balance| *balance = balance.saturating_sub(amount));
-			TotalSupply::<T>::mutate(token_id, |supply| *supply = supply.saturating_sub(amount));
-		}
-
-		Self::deposit_event(RawEvent::Burn(*token_id, account.clone(), amount));
-
-		Ok(())
-	}
-
-	pub fn do_burn_batch(token_id: &T::TokenId, accounts: &Vec<T::AccountId>, amounts: Vec<T::TokenBalance>) -> Result<(), DispatchError>  {
-		ensure!(Self::exists(token_id), Error::<T>::TokenNotExists);
-
-		for i in 0..accounts.len() {
-			let to = &accounts[i];
-			let amount = amounts[i];
-
-			if Self::is_non_fungible(token_id) {
-				let type_id = Self::get_type_id(token_id);
-	
-				Balances::<T>::mutate(type_id, to, |balance| *balance = balance.saturating_sub(amount));
-				TotalSupply::<T>::mutate(type_id, |supply| *supply = supply.saturating_sub(amount));
-			} else {
-				Balances::<T>::mutate(token_id, to, |balance| *balance = balance.saturating_sub(amount));
-				TotalSupply::<T>::mutate(token_id, |supply| *supply = supply.saturating_sub(amount));
-			}
-		}
-
-		Self::deposit_event(RawEvent::BurnBatch(*token_id, accounts.clone(), amounts));
-		
-		Ok(())
-	}
-
-	pub fn do_safe_transfer_from(
-		token_id: &T::TokenId,
-		from: &T::AccountId,
+	pub fn mint(
 		to: &T::AccountId,
+		id: &T::TokenId,
 		amount: T::TokenBalance
 	) -> DispatchResult {
-		let _new_balance = Self::balances(token_id, from)
-			.checked_sub(&amount)
-			.ok_or(Error::<T>::InsufficientBalance)?;
+		Balances::<T>::try_mutate(id, to, |balance| -> DispatchResult {
+			*balance = balance
+				.checked_add(&amount)
+				.ok_or(Error::<T>::NumOverflow)?;
+			Ok(())
+		})?;
 
-		if from != to {
-			if Self::is_non_fungible(token_id) {
-				let type_id = Self::get_type_id(token_id);
-	
-				Balances::<T>::mutate(type_id, from, |balance| *balance -= amount);
-				Balances::<T>::mutate(type_id, to, |balance| *balance += amount);
-			} else {
-				Balances::<T>::mutate(token_id, from, |balance| *balance -= amount);
-				Balances::<T>::mutate(token_id, to, |balance| *balance += amount);
-			}
-
-			Self::deposit_event(RawEvent::Transferred(*token_id, from.clone(), to.clone(), amount));
-		}
+		Self::deposit_event(RawEvent::Mint(to.clone(), id.clone(), amount));
 
 		Ok(())
+	}
+
+	pub fn batch_mint(
+		to: &T::AccountId,
+		ids: &Vec<T::TokenId>,
+		amounts: Vec<T::TokenBalance>
+	) -> DispatchResult {
+		ensure!(ids.len() == amounts.len(), Error::<T>::InvalidArrayLength);
+
+		let n = ids.len();
+
+		for i in 0..n {
+			let id = ids[i];
+			let amount = amounts[i];
+
+			Balances::<T>::try_mutate(id, to, |balance| -> DispatchResult {
+				*balance = balance
+					.checked_add(&amount)
+					.ok_or(Error::<T>::NumOverflow)?;
+				Ok(())
+			})?;
+		}
+
+		Self::deposit_event(RawEvent::BatchMint(to.clone(), ids.clone(), amounts));
+
+		Ok(())
+	}
+
+	pub fn burn(
+		from: &T::AccountId,
+		id: &T::TokenId,
+		amount: T::TokenBalance
+	) -> DispatchResult {
+		Balances::<T>::try_mutate(id, from, |balance| -> DispatchResult {
+			*balance = balance
+				.checked_sub(&amount)
+				.ok_or(Error::<T>::NumOverflow)?;
+			Ok(())
+		})?;
+
+		Self::deposit_event(RawEvent::Burn(from.clone(), id.clone(), amount));
+
+		Ok(())
+	}
+
+	pub fn batch_burn(
+		from: &T::AccountId,
+		ids: &Vec<T::TokenId>,
+		amounts: Vec<T::TokenBalance>
+	) -> DispatchResult {
+		ensure!(ids.len() == amounts.len(), Error::<T>::InvalidArrayLength);
+
+		let n = ids.len();
+
+		for i in 0..n {
+			let id = ids[i];
+			let amount = amounts[i];
+
+			Balances::<T>::try_mutate(id, from, |balance| -> DispatchResult {
+				*balance = balance
+					.checked_sub(&amount)
+					.ok_or(Error::<T>::NumOverflow)?;
+				Ok(())
+			})?;
+		}
+
+		Self::deposit_event(RawEvent::BatchBurn(from.clone(), ids.clone(), amounts));
+
+		Ok(())
+	}
+
+	pub fn transfer_from(
+		from: &T::AccountId,
+		to: &T::AccountId,
+		id: &T::TokenId,
+		amount: T::TokenBalance
+	) -> DispatchResult {
+		if from == to {
+			return Ok(());
+		}
+
+		Balances::<T>::try_mutate(id, from, |balance| -> DispatchResult {
+			*balance = balance
+				.checked_sub(&amount)
+				.ok_or(Error::<T>::NumOverflow)?;
+			Ok(())
+		})?;
+
+		Balances::<T>::try_mutate(id, to, |balance| -> DispatchResult {
+			*balance = balance
+				.checked_add(&amount)
+				.ok_or(Error::<T>::NumOverflow)?;
+			Ok(())
+		})?;
+
+		Self::deposit_event(RawEvent::Transferred(from.clone(), to.clone(), id.clone(), amount));
+
+		Ok(())
+	}
+
+	pub fn batch_transfer_from(
+		from: &T::AccountId,
+		to: &T::AccountId,
+		ids: &Vec<T::TokenId>,
+		amounts: Vec<T::TokenBalance>
+	) -> DispatchResult {
+		if from == to {
+			return Ok(());
+		}
+
+		ensure!(ids.len() == amounts.len(), Error::<T>::InvalidArrayLength);
+
+		let n = ids.len();
+
+		for i in 0..n {
+			let id = &ids[i];
+			let amount = amounts[i];
+
+			Balances::<T>::try_mutate(id, from, |balance| -> DispatchResult {
+				*balance = balance
+					.checked_sub(&amount)
+					.ok_or(Error::<T>::NumOverflow)?;
+				Ok(())
+			})?;
+	
+			Balances::<T>::try_mutate(id, to, |balance| -> DispatchResult {
+				*balance = balance
+					.checked_add(&amount)
+					.ok_or(Error::<T>::NumOverflow)?;
+				Ok(())
+			})?;
+		}
+
+		Self::deposit_event(RawEvent::BatchTransferred(from.clone(), to.clone(), ids.to_vec(), amounts));
+
+		Ok(())
+	}
+
+	pub fn balance_of(owner: &T::AccountId, id: &T::TokenId) -> T::TokenBalance {
+		Self::balances(id, owner)
+	}
+
+	pub fn balance_of_batch(owners: &Vec<T::AccountId>, ids: &Vec<T::TokenId>) -> Result<Vec<T::TokenBalance>, DispatchError> {
+		ensure!(owners.len() == ids.len(), Error::<T>::InvalidArrayLength);
+
+		let mut batch_balances = vec![T::TokenBalance::from(0); owners.len()];
+
+		let n = owners.len();
+
+		for i in 0..n {
+			let owner = &owners[i];
+			let id = ids[i];
+
+			batch_balances[i] = Self::balances(id, owner);
+		}
+
+		Ok(batch_balances)
 	}
 
 }

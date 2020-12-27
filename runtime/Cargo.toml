@@ -1,5 +1,5 @@
 [package]
-name = "node-template-runtime"
+name = "node-spruce-runtime"
 version = "2.0.0"
 authors = ["Anonymous"]
 edition = "2018"
@@ -45,9 +45,8 @@ hex-literal = { version = "0.3.1", optional = true }
 # template = { package = "pallet-template", default-features = false, path = "../pallets/template" }
 pallet-token = { path = "../pallets/token", default-features = false }
 pallet-dex = { path = "../pallets/dex", default-features = false }
-pallet-wrap = { path = "../pallets/wrap", default-features = false }
-pallet-cdp = { path = "../pallets/cdp", default-features = false }
-pallet-valley = { path = "../pallets/valley", default-features = false }
+pallet-currency = { path = "../pallets/currency", default-features = false }
+pallet-nft = { path = "../pallets/nft", default-features = false }
 pallet-tao = { path = "../pallets/tao", default-features = false }
 pallet-commodity = { path = "../pallets/commodity", default-features = false }
 
@@ -87,9 +86,8 @@ std = [
     # "template/std",
     "pallet-token/std",
     "pallet-dex/std",
-    "pallet-wrap/std",
-    "pallet-cdp/std",
-    "pallet-valley/std",
+    "pallet-currency/std",
+    "pallet-nft/std",
     "pallet-tao/std",
     "pallet-commodity/std",
 ]

@@ -16,7 +16,7 @@ pallet-timestamp = { version = "2.0.0", default-features = false }
 
 token = { package = "pallet-token", path = "../token", default-features = false }
 # valley = { package = "pallet-valley", path = "../valley", default-features = false }
-commodity = { package = "pallet-commodity", path = "../commodity", default-features = false }
+# commodity = { package = "pallet-commodity", path = "../commodity", default-features = false }
 
 [dev-dependencies]
 sp-core = { version = "2.0.0", default-features = false }
@@ -35,5 +35,5 @@ std = [
 	'pallet-timestamp/std',
 	'token/std',
 	# 'valley/std',
-	'commodity/std',
+	# 'commodity/std',
 ]

@@ -269,48 +269,39 @@ impl pallet_sudo::Trait for Runtime {
 
 impl pallet_token::Trait for Runtime {
 	type Event = Event;
-	type Randomness = RandomnessCollectiveFlip;
+	// type Randomness = RandomnessCollectiveFlip;
 	type TokenBalance = u128;
-	type TokenId = [u8; 32];
+	type TokenId = u64;
 }
 
 parameter_types! {
-	pub const DexModuleId: ModuleId = ModuleId(*b"spru/dex");
-	pub const WrapModuleId: ModuleId = ModuleId(*b"spru/wra");
-	pub const ValleyModuleId: ModuleId = ModuleId(*b"spru/val");
-	pub const CommodityModuleId: ModuleId = ModuleId(*b"spru/com");
+	pub const DexModuleId: ModuleId = ModuleId(*b"spr/dexm");
+	pub const CommodityModuleId: ModuleId = ModuleId(*b"spr/comd");
 }
 
 impl pallet_dex::Trait for Runtime {
 	type Event = Event;
 	type ModuleId = DexModuleId;
-	type PairId = u64;
 }
 
-impl pallet_wrap::Trait for Runtime {
-	type Event = Event;
-	type ModuleId = DexModuleId;
-	type Currency = Balances;
-}
-
-impl pallet_cdp::Trait for Runtime {
+impl pallet_currency::Trait for Runtime {
 	type Event = Event;
 }
 
-impl pallet_valley::Trait for Runtime {
+impl pallet_nft::Trait for Runtime {
 	type Event = Event;
-	type ModuleId = ValleyModuleId;
 }
 
 impl pallet_commodity::Trait for Runtime {
 	type Event = Event;
+ 	type Randomness = RandomnessCollectiveFlip;
 	type ModuleId = CommodityModuleId;
-	type CommodityId = u32;
+	type CommodityId = u64;
 }
 
 impl pallet_tao::Trait for Runtime {
 	type Event = Event;
-	type TaoId = u32;
+	type TaoId = u64;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -332,9 +323,8 @@ construct_runtime!(
 		// TemplateModule: template::{Module, Call, Storage, Event<T>},
 		TokenModule: pallet_token::{Module, Call, Storage, Event<T>},
 		DexModule: pallet_dex::{Module, Call, Storage, Event<T>},
-		WrapModule: pallet_wrap::{Module, Call, Storage, Event<T>},
-		CdpModule: pallet_cdp::{Module, Call, Storage, Event<T>},
-		ValleyModule: pallet_valley::{Module, Call, Storage, Event<T>},
+		CurrencyModule: pallet_currency::{Module, Call, Storage, Event<T>},
+		NftModule: pallet_nft::{Module, Call, Storage, Event<T>},
 		CommodityModule: pallet_commodity::{Module, Call, Storage, Event<T>},
 		TaoModule: pallet_tao::{Module, Call, Storage, Event<T>},
 	}

@@ -4,10 +4,9 @@ members = [
     "runtime",
     "pallets/primitives",
     "pallets/token",
-    "pallets/wrap",
     "pallets/dex",
-    "pallets/cdp",
-    "pallets/valley",
+    "pallets/currency",
+    "pallets/nft",
     "pallets/commodity",
     "pallets/tao",
 ]

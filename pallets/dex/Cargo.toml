@@ -13,11 +13,11 @@ sp-std = { version = "2.0.0", default-features = false }
 sp-io = { version = "2.0.0", default-features = false }
 sp-runtime = { version = "2.0.0", default-features = false }
 pallet-timestamp = { version = "2.0.0", default-features = false }
-
-token = { package = "pallet-token", path = "../token", default-features = false }
-
-[dev-dependencies]
 sp-core = { version = "2.0.0", default-features = false }
+
+primitives = { package = "pallet-primitives", path = "../primitives", default-features = false }
+token = { package = "pallet-token", path = "../token", default-features = false }
+currency = { package = "pallet-currency", path = "../currency", default-features = false }
 
 
 [features]
@@ -30,5 +30,8 @@ std = [
     'sp-io/std',
     'sp-runtime/std',
     'pallet-timestamp/std',
-    'token/std'
+    'sp-core/std',
+    'primitives/std',
+    'token/std',
+    'currency/std',
 ]

@@ -3,19 +3,21 @@
 use codec::{Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_error, decl_event, ensure, StorageValue, StorageMap, Parameter,
-	traits::{Randomness, Currency, Get},
+	traits::{Randomness, Get},
 	dispatch::{DispatchResult, DispatchError},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 use sp_runtime::{
 	ModuleId, RuntimeDebug,
-	traits::{StaticLookup, AccountIdConversion, AtLeast32Bit, Bounded, Member, Hash, One},
+	traits::{AccountIdConversion, AtLeast32Bit, Bounded, Member, Hash, One},
 };
-use sp_std::{prelude::*, cmp, fmt::Debug, result};
+use primitives::{CurrencyId};
+use sp_std::prelude::*;
 
 /// The pallet's configuration trait.
-pub trait Trait: frame_system::Trait + pallet_timestamp::Trait + token::Trait + valley::Trait {
+pub trait Trait: frame_system::Trait + pallet_timestamp::Trait + currency::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Randomness: Randomness<Self::Hash>;
 	type ModuleId: Get<ModuleId>;
 	type CommodityId: Parameter + Member + AtLeast32Bit + Bounded + Default + Copy;
 }
@@ -26,23 +28,23 @@ pub struct Commodity<AccountId, CommodityId, TokenId, TokenBalance, Moment>
 	id: CommodityId,
 	creator: AccountId,
 	token: TokenId,
-	prop: CommodityProperty<AccountId, TokenId, TokenBalance>,
+	prop: CommodityProperty<AccountId, TokenBalance>,
 	created: Moment,
 }
 
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum CommodityProperty<AccountId, TokenId, TokenBalance> {
-	RealCommodityProperty(RealCommodityProperty<AccountId, TokenId, TokenBalance>),
+pub enum CommodityProperty<AccountId, TokenBalance> {
+	RealCommodityProperty(RealCommodityProperty<AccountId, TokenBalance>),
 	VirtualCommodityProperty(VirtualCommodityProperty),
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct RealCommodityProperty<AccountId, TokenId, TokenBalance> {
+pub struct RealCommodityProperty<AccountId, TokenBalance> {
 	pub reserve: u128,
 	pub stake_rate: u128,
 	pub duration: u64,
-	pub collateral_token: TokenId,
+	pub collateral_currency: CurrencyId,
 	pub stake_balance: TokenBalance,
 	pub stake_minted: TokenBalance,
 	pub account: AccountId,
@@ -59,9 +61,9 @@ pub enum CommodityType {
 	VirtualCommodity,
 }
 
-/// Commodity creation options.
+/// Commodity creation data.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct CommodityOptions<AccountId> {
+pub struct CommodityData<AccountId> {
 	pub is_nf: bool,
 	pub token_uri: Vec<u8>,
 	pub commodity_type: CommodityType,
@@ -140,11 +142,11 @@ decl_event!(
 		AccountId = <T as frame_system::Trait>::AccountId,
 		CommodityId = <T as Trait>::CommodityId,
 		Balance = <T as token::Trait>::TokenBalance,
-		CommodityOptions = CommodityOptions<<T as frame_system::Trait>::AccountId>,
+		CommodityData = CommodityData<<T as frame_system::Trait>::AccountId>,
 	{
-		Created(CommodityId, AccountId, CommodityOptions),
-		PermissionUpdated(CommodityId, PermissionsV1<AccountId>),
-		PropertyUpdated(CommodityId, u128, u128, u64),
+		Created(CommodityId, AccountId, CommodityData),
+		PermissionUpdated(CommodityId, AccountId, PermissionsV1<AccountId>),
+		PropertyUpdated(CommodityId, AccountId, u128, u128, u64),
 		AddStake(CommodityId, AccountId, Balance),
 		RemoveStake(CommodityId, AccountId, Balance),
 		Mint(CommodityId, AccountId, Balance),
@@ -179,11 +181,11 @@ decl_module! {
 		fn deposit_event() = default;
 
 		#[weight = 0]
-		pub fn create(origin, options: CommodityOptions<T::AccountId>) -> DispatchResult {
+		pub fn create_commodity(origin, collateral: CurrencyId, data: CommodityData<T::AccountId>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			let commodity_id = Self::create_commodity(&sender, &options);
-			Self::deposit_event(RawEvent::Created(commodity_id, sender, options));
+			let commodity_id = Self::do_create_commodity(&sender, &collateral, &data)?;
+			Self::deposit_event(RawEvent::Created(commodity_id, sender, data));
 			Ok(())
 		}
 
@@ -198,7 +200,7 @@ decl_module! {
 			if Self::check_permission(&commodity_id, &sender, &PermissionType::Update) {
 				<Permissions<T>>::insert(commodity_id, &new_permission);
 
-				Self::deposit_event(RawEvent::PermissionUpdated(commodity_id, new_permission));
+				Self::deposit_event(RawEvent::PermissionUpdated(commodity_id, sender, new_permission));
 
 				Ok(())
 			} else {
@@ -216,9 +218,9 @@ decl_module! {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			Self::do_update_property(&commodity_id, reserve, stake_rate, duration);
+			Self::do_update_property(&commodity_id, reserve, stake_rate, duration)?;
 
-			Self::deposit_event(RawEvent::PropertyUpdated(commodity_id, reserve, stake_rate, duration));
+			Self::deposit_event(RawEvent::PropertyUpdated(commodity_id, sender, reserve, stake_rate, duration));
 			Ok(())
 		}
 
@@ -323,21 +325,19 @@ impl<T: Trait> Module<T> {
 		Self::commodities(commodity_id).is_some()
 	}
 
-	pub fn create_commodity(who: &T::AccountId, options: &CommodityOptions<T::AccountId>) -> T::CommodityId {
-		let token_id = token::Module::<T>::create_token(who, options.is_nf, &options.token_uri);
+	pub fn do_create_commodity(who: &T::AccountId, collateral: &CurrencyId, data: &CommodityData<T::AccountId>) -> Result<T::CommodityId, DispatchError> {
+		let token_id = token::Module::<T>::create_token(who, data.is_nf, &data.token_uri)?;
 		
 		let commodity_id = Self::next_commodity_id();
-		
-		let bei_token_id = valley::Module::<T>::bei_token_id();
 
-		let prop = match options.commodity_type {
+		let prop = match data.commodity_type {
 			CommodityType::RealCommodity => {
 				CommodityProperty::RealCommodityProperty(
 					RealCommodityProperty {
 						reserve: 0,
 						stake_rate: 0,
 						duration: 0,
-						collateral_token: bei_token_id,
+						collateral_currency: collateral.clone(),
 						stake_balance: T::TokenBalance::from(0),
 						stake_minted: T::TokenBalance::from(0),
 						account: Self::pay_account(&who),
@@ -361,13 +361,13 @@ impl<T: Trait> Module<T> {
 			created: pallet_timestamp::Module::<T>::now(),
 		};
 
-		let permissions = options.permissions.clone();
+		let permissions = data.permissions.clone();
 
 		Commodities::<T>::insert(commodity_id, new_commodity);
 		NextCommodityId::<T>::mutate(|id| *id += <T::CommodityId as One>::one());
 		Permissions::<T>::insert(commodity_id, permissions);
 
-		commodity_id
+		Ok(commodity_id)
 	}
 
 	pub fn do_update_property(
@@ -394,13 +394,14 @@ impl<T: Trait> Module<T> {
 
 	pub fn do_add_stake(commodity_id: &T::CommodityId, who: &T::AccountId, amount: T::TokenBalance) -> DispatchResult {
 		if Self::check_permission(commodity_id, who, &PermissionType::AddStake) {
-			let mut commodity = Self::commodities(commodity_id).ok_or(Error::<T>::InvalidCommodityId)?;
+			let mut commodity = Self::check_and_get_commodity(commodity_id, &CommodityType::RealCommodity)?;
 
 			match commodity.prop {
 				CommodityProperty::RealCommodityProperty(ref mut p) => {
 					p.stake_balance += amount;
 
-					token::Module::<T>::do_safe_transfer_from(&p.collateral_token, &who, &p.account, amount)?;
+					let collateral_token = currency::Module::<T>::get_currency_token(&p.collateral_currency)?; 
+					token::Module::<T>::transfer_from(&who, &p.account, &collateral_token, amount)?;
 
 					Commodities::<T>::insert(commodity_id, commodity);
 				},
@@ -421,7 +422,8 @@ impl<T: Trait> Module<T> {
 				ensure!(amount < p.stake_balance, Error::<T>::InsufficientAmount);
 				p.stake_balance -= amount;
 
-				token::Module::<T>::do_safe_transfer_from(&p.collateral_token, &p.account, &who, amount)?;
+				let collateral_token = currency::Module::<T>::get_currency_token(&p.collateral_currency)?;
+				token::Module::<T>::transfer_from(&p.account, &who, &collateral_token, amount)?;
 
 				Commodities::<T>::insert(commodity_id, commodity);
 			},
@@ -447,12 +449,12 @@ impl<T: Trait> Module<T> {
 					p.stake_balance -= expected_available;
 					p.stake_minted += amount;
 	
-					token::Module::<T>::do_mint(&commodity.token, &who, amount)?;
+					token::Module::<T>::mint(&who, &commodity.token, amount)?;
 	
 					Commodities::<T>::insert(commodity_id, commodity);
 				},
 				_ => {
-					token::Module::<T>::do_mint(&commodity.token, &who, amount)?;
+					token::Module::<T>::mint(&who, &commodity.token, amount)?;
 				},
 			}
 
@@ -473,12 +475,12 @@ impl<T: Trait> Module<T> {
 				p.stake_balance += expected_available;
 				p.stake_minted -= amount;
 
-				token::Module::<T>::do_burn(&commodity.token, &who, amount)?;
+				token::Module::<T>::burn(&who, &commodity.token, amount)?;
 
 				Commodities::<T>::insert(commodity_id, commodity);
 			},
 			_ => {
-				token::Module::<T>::do_burn(&commodity.token, &who, amount)?;
+				token::Module::<T>::burn(&who, &commodity.token, amount)?;
 			},
 		}
 
@@ -497,8 +499,9 @@ impl<T: Trait> Module<T> {
 				p.stake_balance = p.stake_balance + expected_available - token_to_collateral;
 				p.stake_minted -= amount;
 
-				token::Module::<T>::do_burn(&commodity.token, &who, amount)?;
-				token::Module::<T>::do_safe_transfer_from(&p.collateral_token, &p.account, &who, token_to_collateral)?;
+				token::Module::<T>::burn(&who, &commodity.token, amount)?;
+				let collateral_token = currency::Module::<T>::get_currency_token(&p.collateral_currency)?;
+				token::Module::<T>::transfer_from(&p.account, &who, &collateral_token, token_to_collateral)?;
 
 				Commodities::<T>::insert(commodity_id, commodity);
 			},
@@ -511,7 +514,7 @@ impl<T: Trait> Module<T> {
 	pub fn do_transfer(commodity_id: &T::CommodityId, from: &T::AccountId, to: &T::AccountId, amount: T::TokenBalance) -> DispatchResult {
 		let commodity = Self::check_and_get_commodity(commodity_id, &CommodityType::VirtualCommodity)?;
 
-		token::Module::<T>::do_safe_transfer_from(&commodity.token, &from, &to, amount)?;
+		token::Module::<T>::transfer_from(&from, &to, &commodity.token, amount)?;
 
 		Ok(())
 	}

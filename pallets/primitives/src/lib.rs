@@ -1,20 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
 use sp_runtime::{
     generic,
     traits::{Verify, BlakeTwo256, IdentifyAccount},
-    OpaqueExtrinsic, MultiSignature, RuntimeDebug,
+    OpaqueExtrinsic, MultiSignature,
 };
-
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
-#[derive(Encode, Decode, Eq, PartialEq, Copy, Clone, RuntimeDebug, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum CurrencyId {
-	SPR = 0,
-}
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -53,3 +43,6 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, OpaqueExtrinsic>;
 /// Block ID.
 pub type BlockId = generic::BlockId<Block>;
+
+///Currency ID
+pub type CurrencyId = u64;
