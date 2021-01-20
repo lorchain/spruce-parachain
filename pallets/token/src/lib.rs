@@ -1,8 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_error, decl_event, ensure, StorageValue, StorageMap, Parameter,
+	weights::Weight, 
 	dispatch::{DispatchResult, DispatchError},
 };
 use sp_runtime::{
@@ -21,8 +22,11 @@ use sp_std::vec;
 pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	
-	type TokenBalance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy +
-		MaybeSerializeDeserialize + From<u128> + Into<u128>;
+	// type TokenBalance: Parameter + Member + AtLeast32BitUnsigned + MaybeSerializeDeserialize
+	// 	+ Copy + From<u32> + Into<Weight> + Default;
+	// type TokenBalance: Parameter + codec::HasCompact + From<u32> + Into<Weight> + Default;
+	type TokenBalance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
+	MaybeSerializeDeserialize + From<u32> + From<u128>;
     
     type TokenId: Parameter + Member + AtLeast32Bit + Bounded + Default + Copy;
 }
@@ -258,7 +262,7 @@ impl<T: Trait> Module<T> {
 	pub fn balance_of_batch(owners: &Vec<T::AccountId>, ids: &Vec<T::TokenId>) -> Result<Vec<T::TokenBalance>, DispatchError> {
 		ensure!(owners.len() == ids.len(), Error::<T>::InvalidArrayLength);
 
-		let mut batch_balances = vec![T::TokenBalance::from(0); owners.len()];
+		let mut batch_balances = vec![T::TokenBalance::from(0u32); owners.len()];
 
 		let n = owners.len();
 

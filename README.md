@@ -1,5 +1,13 @@
 # Spruce Parachain
 
+## Init
+
+Run the [init script](scripts/init.sh) to configure the Rust toolchain for WebAssembly compilation:
+
+```bash
+make init
+```
+
 ## Build
 
 Install Rust:
@@ -11,7 +19,6 @@ curl https://sh.rustup.rs -sSf | sh
 Build Wasm and native code:
 
 ```bash
-make init
 make build
 ```
 

@@ -142,7 +142,7 @@ decl_module! {
 
 			let mut total_refund_currency: T::TokenBalance = max_currency;
 
-			let mut amounts_in = vec![T::TokenBalance::from(0); n];
+			let mut amounts_in = vec![T::TokenBalance::from(0u32); n];
 			// let mut token_reserves = vec![0 as T::TokenBalance; n];
 
 			let token_reserves = Self::get_token_reserves(&exchange.vault, &token_ids);
@@ -188,8 +188,8 @@ decl_module! {
 			let exchange = Self::exchanges(exchange_id).ok_or(Error::<T>::InvalidExchangeId)?;
 
 			let n = token_ids.len();
-			let mut total_currency = T::TokenBalance::from(0);
-			let mut amounts_out = vec![T::TokenBalance::from(0); n];
+			let mut total_currency = T::TokenBalance::from(0u32);
+			let mut amounts_out = vec![T::TokenBalance::from(0u32); n];
 			// let mut token_reserves = vec![0 as T::TokenBalance; n];
 
 			let token_reserves = Self::get_token_reserves(&exchange.vault, &token_ids);
@@ -233,10 +233,10 @@ decl_module! {
 			let currency_token = currency::Module::<T>::get_currency_token(&exchange.currency)?;
 
 			let n = token_ids.len();
-			let mut total_currency = T::TokenBalance::from(0);
+			let mut total_currency = T::TokenBalance::from(0u32);
 
-			let mut liquidities_to_mint = vec![T::TokenBalance::from(0); n];
-			let mut currency_amounts = vec![T::TokenBalance::from(0); n];
+			let mut liquidities_to_mint = vec![T::TokenBalance::from(0u32); n];
+			let mut currency_amounts = vec![T::TokenBalance::from(0u32); n];
 			// let mut token_reserves = [0 as T::TokenBalance; n];
 
 			let token_reserves = Self::get_token_reserves(&exchange.vault, &token_ids);
@@ -261,7 +261,7 @@ decl_module! {
 
 					total_currency = total_currency + currency_amount;
 
-					let fixed_currency_amount = if rounded { currency_amount - 1.into() } else { currency_amount };
+					let fixed_currency_amount = if rounded { currency_amount - 1u32.into() } else { currency_amount };
 					liquidities_to_mint[i] = (fixed_currency_amount * total_liquidity) / currency_reserve;
 					currency_amounts[i] = currency_amount;
 
@@ -269,7 +269,7 @@ decl_module! {
 					TotalSupplies::<T>::mutate(id, |total_supply| *total_supply = total_liquidity + liquidities_to_mint[i]);
 				} else {
 					let max_currency = max_currencys[i];
-					ensure!(max_currency >= 1000000000.into(), Error::<T>::InvalidCurrencyAmount);
+					ensure!(max_currency >= 1000000000u32.into(), Error::<T>::InvalidCurrencyAmount);
 
 					total_currency = total_currency + max_currency;
 					liquidities_to_mint[i] = max_currency;
@@ -305,10 +305,10 @@ decl_module! {
 			let exchange = Self::exchanges(exchange_id).ok_or(Error::<T>::InvalidExchangeId)?;
 
 			let n = token_ids.len();
-			let mut total_currency = T::TokenBalance::from(0);
+			let mut total_currency = T::TokenBalance::from(0u32);
 
-			let mut token_amounts = vec![T::TokenBalance::from(0); n];
-			let mut currency_amounts = vec![T::TokenBalance::from(0); n];
+			let mut token_amounts = vec![T::TokenBalance::from(0u32); n];
+			let mut currency_amounts = vec![T::TokenBalance::from(0u32); n];
 			// let mut token_reserves = [0 as T::TokenBalance; n];
 
 			let token_reserves = Self::get_token_reserves(&exchange.vault, &token_ids);
@@ -359,8 +359,8 @@ impl<T: Trait> Module<T> {
 		ensure!(amount_out > Zero::zero() , Error::<T>::InsufficientOutputAmount);
 		ensure!(reserve_in > Zero::zero()  && reserve_out > Zero::zero() , Error::<T>::InsufficientLiquidity);
 		
-		let numerator = reserve_in * amount_out * 1000.into();
-		let denominator = (reserve_out - amount_out) * 995.into();
+		let numerator = reserve_in * amount_out * 1000u32.into();
+		let denominator = (reserve_out - amount_out) * 995u32.into();
 		let (amount_in, _) = Self::div_round(numerator, denominator);
 
 		Ok(amount_in)
@@ -374,9 +374,9 @@ impl<T: Trait> Module<T> {
 		ensure!(amount_in > Zero::zero() , Error::<T>::InsufficientInputAmount);
 		ensure!(reserve_in > Zero::zero()  && reserve_out > Zero::zero() , Error::<T>::InsufficientLiquidity);
 
-		let amount_in_with_fee = amount_in * 995.into();
+		let amount_in_with_fee = amount_in * 995u32.into();
 		let numerator = amount_in_with_fee * reserve_out;
-		let denominator = (reserve_in * 1000.into()) + amount_in_with_fee;
+		let denominator = (reserve_in * 1000u32.into()) + amount_in_with_fee;
 		let amount_out = numerator / denominator;
 
 		Ok(amount_out)
@@ -386,7 +386,7 @@ impl<T: Trait> Module<T> {
 		let n = token_ids.len();
 
 		if n == 1 {
-			let mut token_reserves = vec![T::TokenBalance::from(0); n];
+			let mut token_reserves = vec![T::TokenBalance::from(0u32); n];
 			token_reserves[0] = token::Module::<T>::balance_of(vault, &token_ids[0]);
 			token_reserves
 		} else {
@@ -400,7 +400,7 @@ impl<T: Trait> Module<T> {
 		if a % b > Zero::zero() {
 			(a / b, false)
 		} else {
-			((a / b) + 1.into(), true)
+			((a / b) + 1u32.into(), true)
 		}
 	}
 }

@@ -295,7 +295,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn require_amount(rate: u128, amount: T::TokenBalance) -> T::TokenBalance {
-		amount * rate.into() / 100.into()
+		amount * rate.into() / 100u128.into()
 	}
 
 	fn convert_to_collateral(price: u128, amount: T::TokenBalance) -> T::TokenBalance {
@@ -338,8 +338,8 @@ impl<T: Trait> Module<T> {
 						stake_rate: 0,
 						duration: 0,
 						collateral_currency: collateral.clone(),
-						stake_balance: T::TokenBalance::from(0),
-						stake_minted: T::TokenBalance::from(0),
+						stake_balance: T::TokenBalance::from(0u32),
+						stake_minted: T::TokenBalance::from(0u32),
 						account: Self::pay_account(&who),
 					},
 				)
