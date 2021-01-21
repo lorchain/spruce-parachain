@@ -1,0 +1,11 @@
+{
+  "TokenId": "u64",
+  "TokenBalance": "u128",
+  "TaoId": "u64",
+  "CommodityId": "u64",
+  "ExchangeId": "u64",
+  "CurrencyId": "u64",
+  "CollectionId": "u64",
+  "AssetId": "u64",
+  "NftIndex": "u64"
+}

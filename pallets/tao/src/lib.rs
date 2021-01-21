@@ -55,9 +55,11 @@ decl_event!(
 	pub enum Event<T> where
 		AccountId = <T as frame_system::Trait>::AccountId,
 		TaoId = <T as Trait>::TaoId,
+		TokenBalance = <T as token::Trait>::TokenBalance,
 	{
 		TaoCreated(TaoId, AccountId),
 		TaoItemCreated(TaoId, TaoItemId, AccountId),
+		Mint(TaoId, TaoItemId, TokenBalance, AccountId),
 	}
 );
 
@@ -105,6 +107,19 @@ decl_module! {
 			NextTaoItemId::<T>::mutate(tao_id, |id| *id += <TaoItemId as One>::one());
 
 			Self::deposit_event(RawEvent::TaoItemCreated(tao_id, item_id, who));
+
+			Ok(())
+		}
+
+		#[weight = 0]
+		pub fn mint(origin, tao_id: T::TaoId, item_id: TaoItemId, amount: T::TokenBalance, to: T::AccountId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			let tao_item = Self::tao_items(tao_id, item_id).ok_or(Error::<T>::InvalidTaoId)?;
+
+			token::Module::<T>::mint(&to, &tao_item.token, amount);
+
+			Self::deposit_event(RawEvent::Mint(tao_id, item_id, amount, to));
 
 			Ok(())
 		}

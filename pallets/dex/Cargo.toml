@@ -19,6 +19,9 @@ primitives = { package = "pallet-primitives", path = "../primitives", default-fe
 token = { package = "pallet-token", path = "../token", default-features = false }
 currency = { package = "pallet-currency", path = "../currency", default-features = false }
 
+[dev-dependencies]
+pallet-balances = { package = 'pallet-balances', version = '2.0.1' }
+tao = { package = "pallet-tao", path = "../tao", default-features = false }
 
 [features]
 default = ['std']

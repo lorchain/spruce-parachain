@@ -3,7 +3,7 @@
 use codec::{Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_error, decl_event, ensure, StorageValue, StorageMap, Parameter,
-	traits::{Currency, Get},
+	traits::Get,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{
@@ -16,6 +16,12 @@ use sp_runtime::{
 use primitives::{BlockNumber, CurrencyId};
 use sp_std::prelude::*;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 
 pub type ExchangeId = u64;
 
@@ -27,20 +33,6 @@ pub trait Trait: system::Trait + pallet_timestamp::Trait + currency::Trait {
 	// 	+ MaybeSerializeDeserialize;
 
 }
-
-// const MINIMUM_LIQUIDITY: <T as token::Trait>::TokenBalance = 1000.into(); // 10**3
-// const MINIMUM_LIQUIDITY: u32 = 1000; // 10**3;
-
-// #[derive(Clone, Eq, PartialEq, Encode, Decode)]
-// #[cfg_attr(feature = "std", derive(Debug))]
-// pub struct Pair<T> where
-// 	T: Trait
-// {
-// 	token_a: T::TokenId,
-// 	token_b: T::TokenId,
-// 	pair_token: T::TokenId,
-// 	account: T::AccountId,
-// }
 
 /// Exchange info
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
@@ -57,7 +49,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as DexModule {
 		pub Exchanges get(fn exchanges): map hasher(blake2_128_concat) ExchangeId => Option<ExchangeInfo<T::AccountId>>;
 		pub NextExchangeId get(fn next_exchange_id): ExchangeId;
-		
+
 		pub TotalSupplies get(fn total_supplies): map hasher(blake2_128_concat) T::TokenId => T::TokenBalance;
 		pub CurrencyReserves get(fn currency_reserves): map hasher(blake2_128_concat) T::TokenId => T::TokenBalance;
 	}
@@ -65,7 +57,7 @@ decl_storage! {
 
 // The pallet's events
 decl_event!(
-	pub enum Event<T> where 
+	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
 		TokenId = <T as token::Trait>::TokenId,
 		TokenBalance = <T as token::Trait>::TokenBalance,
@@ -269,7 +261,8 @@ decl_module! {
 					TotalSupplies::<T>::mutate(id, |total_supply| *total_supply = total_liquidity + liquidities_to_mint[i]);
 				} else {
 					let max_currency = max_currencys[i];
-					ensure!(max_currency >= 1000000000u32.into(), Error::<T>::InvalidCurrencyAmount);
+					// ensure!(max_currency >= 1000000000u32.into(), Error::<T>::InvalidCurrencyAmount);
+					ensure!(max_currency >= 1000u32.into(), Error::<T>::InvalidCurrencyAmount);
 
 					total_currency = total_currency + max_currency;
 					liquidities_to_mint[i] = max_currency;
@@ -358,7 +351,7 @@ impl<T: Trait> Module<T> {
 	) -> Result<T::TokenBalance, DispatchError> {
 		ensure!(amount_out > Zero::zero() , Error::<T>::InsufficientOutputAmount);
 		ensure!(reserve_in > Zero::zero()  && reserve_out > Zero::zero() , Error::<T>::InsufficientLiquidity);
-		
+
 		let numerator = reserve_in * amount_out * 1000u32.into();
 		let denominator = (reserve_out - amount_out) * 995u32.into();
 		let (amount_in, _) = Self::div_round(numerator, denominator);

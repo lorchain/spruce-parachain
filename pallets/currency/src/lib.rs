@@ -36,15 +36,20 @@ pub type CurrencyInfoOf<T> =
 // This pallet's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as TemplateModule {
-		pub NextCurrencyId get(fn next_currency_id): CurrencyId;
 		pub Currencies get(fn currencies): map hasher(twox_64_concat) CurrencyId => Option<CurrencyInfoOf<T>>;
+		pub NextCurrencyId get(fn next_currency_id): CurrencyId;
 	}
 }
 
 // The pallet's events
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-		CurrencyCreated(AccountId),
+	pub enum Event<T> where
+		AccountId = <T as frame_system::Trait>::AccountId,
+		CurrencyId = CurrencyId,
+		TokenBalance = <T as token::Trait>::TokenBalance,
+	{
+		Created(CurrencyId, AccountId),
+		Mint(CurrencyId, TokenBalance, AccountId),
 	}
 );
 
@@ -80,7 +85,20 @@ decl_module! {
 			Currencies::<T>::insert(currency_id, new_currency_info);
 			NextCurrencyId::mutate(|id| *id += <u64 as One>::one());
 
-			Self::deposit_event(RawEvent::CurrencyCreated(who));
+			Self::deposit_event(RawEvent::Created(currency_id, who));
+			Ok(())
+		}
+
+		#[weight = 0]
+		pub fn mint(origin, currency_id: CurrencyId, amount: T::TokenBalance, to: T::AccountId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			let currency = Self::currencies(currency_id).ok_or(Error::<T>::InvalidCurrencyId)?;
+
+			token::Module::<T>::mint(&to, &currency.token, amount)?;
+
+			Self::deposit_event(RawEvent::Mint(currency_id, amount, to));
+
 			Ok(())
 		}
 
